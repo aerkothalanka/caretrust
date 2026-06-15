@@ -36,6 +36,53 @@ const api = async (path, options) => {
   return res.json();
 };
 const fmt = (value) => Number(value || 0).toFixed(1);
+const TERM_LABELS = {
+  internalMedicine: 'Internal medicine',
+  generalSurgery: 'General surgery',
+  orthopedicSurgery: 'Orthopedic surgery',
+  physicalMedicineAndRehabilitation: 'Physical medicine & rehabilitation',
+  oralAndMaxillofacialSurgery: 'Oral & maxillofacial surgery',
+  critical: 'Critical care',
+  criti: 'Critical care',
+  ambulance: 'Ambulance service',
+};
+function humanizeTerm(value) {
+  const raw = String(value || '').trim().replace(/^['"\[]+|['"\]]+$/g, '');
+  if (!raw || raw === 'null' || raw === 'undefined') return '';
+  if (TERM_LABELS[raw]) return TERM_LABELS[raw];
+  const spaced = raw
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\bctvs\b/ig, 'CTVS')
+    .replace(/\bicu\b/ig, 'ICU')
+    .replace(/\bcabg\b/ig, 'CABG')
+    .replace(/\boct\b/ig, 'OCT')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return spaced.replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\b(And|Or|Of)\b/g, (w) => w.toLowerCase());
+}
+function termList(values, limit = 6) {
+  let items = Array.isArray(values) ? values : [];
+  if (!items.length && typeof values === 'string') {
+    try {
+      const parsed = JSON.parse(values);
+      items = Array.isArray(parsed) ? parsed : [values];
+    } catch (_) {
+      items = values.split(/[,;|]+/);
+    }
+  }
+  const seen = new Set();
+  return items.map(humanizeTerm).filter((x) => x && !seen.has(x) && seen.add(x)).slice(0, limit);
+}
+function EvidenceChips({ facility, compact = false }) {
+  const groups = [
+    ['Specialties', termList(facility.specialties, compact ? 3 : 6)],
+    ['Procedures', termList(facility.procedures, compact ? 3 : 6)],
+    ['Equipment', termList(facility.equipment, compact ? 2 : 5)],
+  ].filter(([, items]) => items.length);
+  if (!groups.length) return <small>{facility.description || 'Evidence extracted from facility fields.'}</small>;
+  return <div className={compact ? 'evidenceCompact' : 'evidenceChips'}>{groups.slice(0, compact ? 2 : 3).map(([label, items]) => <div key={label} className="chipGroup"><span>{label}</span>{items.map((item) => <i key={item}>{item}</i>)}</div>)}</div>;
+}
 function displayConfidence(f = {}) {
   if (f.human_verified || f.human_verification_status === 'verified') return 'Human verified';
   const score = Number(f.score || f.final_score || 0);
@@ -72,7 +119,7 @@ function projectPoint(f) {
 function AppHeader({ activeTab, setActiveTab, onPlayVoice }) {
   return <header className="topbar">
     <div className="brandNav">
-      <div className="brandBlock"><div className="brand">Care<span>Signal</span></div><div className="brandSub">Facility Help Desk</div></div>
+      <div className="brandBlock"><div className="brand">Care<span>Signal</span></div><div className="brandSub">Facility Trust Desk</div></div>
       <nav className="tabs" aria-label="Main sections">{TABS.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav>
     </div>
     <div className="callTop"><b>Digital call assistant</b><a href="tel:+141****0126">Call CareSignal</a><button onClick={onPlayVoice}>Play voice</button></div>
@@ -100,14 +147,14 @@ function Metrics({ facilities, selected, radius }) {
   </div>;
 }
 function FacilityTable({ facilities, selected, setSelected }) {
-  return <section className="card rankings"><div className="cardTitle"><h2>Ranked facilities</h2><span>Top facilities by selected service</span></div><table className="rank"><thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Score</th><th>Status</th></tr></thead><tbody>{facilities.map((f, i) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => setSelected(f)}><td>#{i + 1}</td><td><b>{f.name}</b><small>{f.evidence_summary || (f.evidence_snippets || [])[0] || f.description || 'Evidence extracted from facility fields.'}</small></td><td>{[f.city, f.state, f.pincode].filter(Boolean).join(', ')}</td><td><b>{fmt(f.score)}</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{displayConfidence(f)}</span></td></tr>)}</tbody></table>{!facilities.length && <p className="empty">No facilities match these filters. Try All states or a wider service.</p>}</section>;
+  return <section className="card rankings"><div className="cardTitle"><h2>Ranked facilities</h2><span>Top facilities by selected service</span></div><table className="rank"><thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Score</th><th>Status</th></tr></thead><tbody>{facilities.map((f, i) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => setSelected(f)}><td>#{i + 1}</td><td><b>{f.name}</b><EvidenceChips facility={f} compact /></td><td>{[f.city, f.state, f.pincode].filter(Boolean).join(', ')}</td><td><b>{fmt(f.score)}</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{displayConfidence(f)}</span></td></tr>)}</tbody></table>{!facilities.length && <p className="empty">No facilities match these filters. Try All states or a wider service.</p>}</section>;
 }
 function TrustCard({ facility, serviceLabel }) {
   if (!facility) return <section className="card"><h2>Trust Card</h2><p>Select a facility to inspect evidence.</p></section>;
   const raw = facility.score_breakdown || [];
   const entries = Array.isArray(raw) ? raw.map((x) => [x.label || x.key, x.score || 0, x.max_score]) : Object.entries(raw).map(([k, v]) => [k, v]);
   const sources = facility.source_urls || [facility.source_url, facility.website].filter(Boolean);
-  return <aside className="card trust"><div className="trustHeader"><div><h2>Trust Card</h2><small>{facility.name}</small></div><div className="score">{fmt(facility.score)}</div></div><p><b>Claim:</b> Supports {serviceLabel}.</p><div className="evidence">{(facility.evidence_snippets || []).slice(0, 2).join(' ') || facility.evidence_summary || facility.description || 'Evidence appears in extracted facility text.'}</div><div className="why">{entries.slice(0, 8).map(([k, v, m]) => <div key={k}><b>{Number(v || 0).toFixed(2)}{m ? `/${m}` : ''}</b><span>{k}</span></div>)}</div><div className="sources"><b>Sources</b>{sources.slice(0, 3).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>)}</div><p className="footer"><b>Uncertainty:</b> {(facility.uncertainty_flags || ['Treat extracted claims as claims to verify, not ground truth.']).join('; ')}</p></aside>;
+  return <aside className="card trust"><div className="trustHeader"><div><h2>Trust Card</h2><small>{facility.name}</small></div><div className="score">{fmt(facility.score)}</div></div><p><b>Claim:</b> Supports {serviceLabel}.</p><div className="evidence"><EvidenceChips facility={facility} />{facility.description && <p>{facility.description.slice(0, 180)}</p>}</div><div className="why">{entries.slice(0, 8).map(([k, v, m]) => <div key={k}><b>{Number(v || 0).toFixed(2)}{m ? `/${m}` : ''}</b><span>{humanizeTerm(k)}</span></div>)}</div><div className="sources"><b>Sources</b>{sources.slice(0, 3).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>)}</div><p className="footer"><b>Uncertainty:</b> {(facility.uncertainty_flags || ['Treat extracted claims as claims to verify, not ground truth.']).join('; ')}</p></aside>;
 }
 
 function googleMapZoom(radius) {

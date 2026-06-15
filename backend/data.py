@@ -574,15 +574,68 @@ def _infer_terms(text: str, key: str) -> list[str]:
     values: list[str] = []
     for definition in PROCEDURES.values():
         for term in definition.get(key, []):
-            term_text = str(term)
+            term_text = _pretty_term(str(term))
             if term_text.lower() in lower and term_text not in values:
                 values.append(term_text)
     return values
 
 
 def _split_values(value: str) -> list[str]:
-    parts = [part.strip() for part in re.split(r"[,;|/]", value) if part.strip()]
-    return parts[:20] if parts else []
+    raw = str(value or "").strip()
+    if not raw:
+        return []
+    parsed: Any = None
+    if raw.startswith("[") and raw.endswith("]"):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = None
+    if isinstance(parsed, list):
+        parts = [str(part).strip() for part in parsed if str(part).strip()]
+    else:
+        cleaned = raw.strip("[]")
+        parts = [part.strip().strip("'\"") for part in re.split(r"[,;|]", cleaned) if part.strip().strip("'\"")]
+    seen: set[str] = set()
+    friendly: list[str] = []
+    for part in parts:
+        item = _pretty_term(part)
+        key = item.lower()
+        if item and key not in seen:
+            seen.add(key)
+            friendly.append(item)
+    return friendly[:20]
+
+
+def _pretty_term(value: str) -> str:
+    overrides = {
+        "internalMedicine": "Internal medicine",
+        "generalSurgery": "General surgery",
+        "orthopedicSurgery": "Orthopedic surgery",
+        "physicalMedicineAndRehabilitation": "Physical medicine & rehabilitation",
+        "oralAndMaxillofacialSurgery": "Oral & maxillofacial surgery",
+        "critical": "Critical care",
+        "criti": "Critical care",
+        "icu": "ICU",
+        "ctvs": "CTVS",
+        "cabg": "CABG",
+    }
+    raw = str(value or "").strip().strip("[]'\"")
+    if not raw:
+        return ""
+    if raw in overrides:
+        return overrides[raw]
+    spaced = re.sub(r"([a-z])([A-Z])", r"\1 \2", raw)
+    spaced = re.sub(r"[_-]+", " ", spaced)
+    words = []
+    for word in spaced.split():
+        lower = word.lower()
+        if lower in {"icu", "ctvs", "cabg", "oct", "pet"}:
+            words.append(lower.upper())
+        elif lower in {"and", "or", "of"}:
+            words.append(lower)
+        else:
+            words.append(word[:1].upper() + word[1:])
+    return " ".join(words)
 
 
 def _first(row: dict[str, Any], *keys: str) -> Any:
