@@ -23,6 +23,7 @@ APP_SCHEMA = "lakebase_hackathon_demo.public"
 class DataStore:
     def __init__(self) -> None:
         self._facilities: list[Facility] | None = None
+        self._pincode_locations: list[dict[str, Any]] | None = None
         self._verifications: list[dict[str, Any]] = []
         self._shortlists: list[dict[str, Any]] = []
         self._voice_sessions: dict[str, dict[str, Any]] = {}
@@ -44,6 +45,59 @@ class DataStore:
         if self._facilities is None:
             self._facilities = self._load_facilities()
         return [self._apply_verification_state(facility) for facility in self._facilities]
+
+
+    def filter_options(self) -> dict[str, list[dict[str, str]]]:
+        facilities = self.list_facilities()
+        locations = self.location_dimensions()
+        def options(values):
+            cleaned = sorted({str(v).strip() for v in values if v})
+            return [{"value": value, "label": value} for value in cleaned]
+        return {
+            "countries": options([row.get("country") for row in locations] + [f.country or "India" for f in facilities]) or [{"value": "India", "label": "India"}],
+            "states": options([row.get("state") for row in locations] + [f.state for f in facilities]),
+            "cities": options([row.get("city") for row in locations] + [f.city for f in facilities]),
+            "pincodes": options([row.get("postal_code") for row in locations] + [f.pincode for f in facilities]),
+            "services": self.service_groupings(),
+            "age_groups": [
+                {"value": "all", "label": "All age groups"},
+                {"value": "child", "label": "Children / pediatric"},
+                {"value": "adult", "label": "Adults"},
+                {"value": "senior", "label": "Seniors"},
+            ],
+        }
+
+    def service_groupings(self) -> list[dict[str, str]]:
+        return [
+            {
+                "service_id": procedure_id,
+                "service_label": "Eye surgery / eye care" if procedure_id == "eye_care" else str(definition["label"]),
+                "specialty_group": _specialty_group(procedure_id),
+                "keywords": ", ".join(str(term) for term in definition.get("terms", [])),
+            }
+            for procedure_id, definition in PROCEDURES.items()
+        ]
+
+    def location_dimensions(self) -> list[dict[str, Any]]:
+        if self._pincode_locations is None:
+            self._pincode_locations = _load_pincode_locations()
+        if self._pincode_locations:
+            return self._pincode_locations
+        seen: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+        for facility in self.list_facilities():
+            key = (facility.country or "India", facility.state or "", facility.city or "", facility.pincode or "")
+            if key not in seen:
+                seen[key] = {
+                    "country": key[0],
+                    "state": key[1],
+                    "city": key[2],
+                    "postal_code": key[3],
+                    "latitude": facility.latitude,
+                    "longitude": facility.longitude,
+                    "facility_count": 0,
+                }
+            seen[key]["facility_count"] += 1
+        return sorted(seen.values(), key=lambda row: (row["country"], row["state"], row["city"], row["postal_code"]))
 
     def get_facility(self, unique_id: str) -> Facility | None:
         for facility in self.list_facilities():
@@ -188,6 +242,63 @@ class DataStore:
             return
 
 
+
+def _load_pincode_locations() -> list[dict[str, Any]]:
+    limit = int(os.getenv("CARESIGNAL_PINCODE_LIMIT", "5000"))
+    query = f"""
+        SELECT
+          'India' AS country,
+          statename AS state,
+          district AS city,
+          CAST(pincode AS STRING) AS postal_code,
+          TRY_CAST(latitude AS DOUBLE) AS latitude,
+          TRY_CAST(longitude AS DOUBLE) AS longitude,
+          COUNT(*) AS facility_count
+        FROM {PINCODE_TABLE}
+        WHERE pincode IS NOT NULL
+        GROUP BY statename, district, pincode, latitude, longitude
+        LIMIT {limit}
+    """
+    try:
+        return _load_query_rows(query)
+    except Exception:
+        return []
+
+
+def _load_query_rows(query: str) -> list[dict[str, Any]]:
+    warehouse_id = os.getenv("DATABRICKS_WAREHOUSE_ID")
+    if not warehouse_id:
+        return []
+    host = (os.getenv("DATABRICKS_HOST") or "").rstrip("/")
+    token = os.getenv("DATABRICKS_TOKEN") or os.getenv("DATABRICKS_PAT")
+    if host and token:
+        if not host.startswith("http"):
+            host = f"https://{host}"
+        response = _statement_api(host, token, {"statement": query, "warehouse_id": warehouse_id, "wait_timeout": "20s", "disposition": "INLINE"})
+        state = response.get("status", {}).get("state")
+        statement_id = response.get("statement_id")
+        attempts = 0
+        while state in {"PENDING", "RUNNING"} and statement_id and attempts < 10:
+            attempts += 1
+            time.sleep(1)
+            response = _statement_api(host, token, None, statement_id)
+            state = response.get("status", {}).get("state")
+        if state == "SUCCEEDED":
+            columns = [column["name"] for column in response.get("manifest", {}).get("schema", {}).get("columns", [])]
+            data = response.get("result", {}).get("data_array", [])
+            return [dict(zip(columns, row)) for row in data] if columns else []
+    from databricks import sql
+    from databricks.sdk.core import Config
+    cfg = Config()
+    conn = sql.connect(server_hostname=cfg.host, http_path=f"/sql/1.0/warehouses/{warehouse_id}", credentials_provider=lambda: cfg.authenticate)
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(query)
+            names = [column[0] for column in cursor.description]
+            return [dict(zip(names, row)) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+
 def _load_databricks_facility_rows() -> list[dict[str, Any]]:
     warehouse_id = os.getenv("DATABRICKS_WAREHOUSE_ID")
     if not warehouse_id:
@@ -272,10 +383,13 @@ def _normalize_facility(row: dict[str, Any], index: int) -> Facility:
     return Facility(
         unique_id=unique_id,
         name=name,
-        state=_string_or_none(_first(lower, "state", "state_name")),
+        country=_string_or_none(_first(lower, "country", "country_name")) or "India",
+        state=_string_or_none(_first(lower, "state", "state_name", "address_stateorregion")),
         district=_string_or_none(_first(lower, "district", "district_name")),
-        city=_string_or_none(_first(lower, "city", "town", "village")),
-        pincode=_string_or_none(_first(lower, "pincode", "pin_code", "postal_code")),
+        city=_string_or_none(_first(lower, "city", "town", "village", "address_city")),
+        pincode=_string_or_none(_first(lower, "pincode", "pin_code", "postal_code", "address_postalcode")),
+        latitude=_float_or_none(_first(lower, "latitude", "lat", "geo_latitude")),
+        longitude=_float_or_none(_first(lower, "longitude", "lon", "lng", "geo_longitude")),
         address=_string_or_none(_first(lower, "address", "street_address", "location")),
         phone=_string_or_none(_first(lower, "phone", "telephone", "mobile", "contact")),
         website=_string_or_none(website),
@@ -299,6 +413,8 @@ def fallback_facilities() -> list[Facility]:
             district="Madurai",
             city="Madurai",
             pincode="625020",
+            latitude=9.9252,
+            longitude=78.1198,
             address="Anna Nagar, Madurai",
             phone="+91-452-4356100",
             website="https://aravind.org",
@@ -317,6 +433,8 @@ def fallback_facilities() -> list[Facility]:
             district="Bengaluru Urban",
             city="Bengaluru",
             pincode="560099",
+            latitude=12.8110,
+            longitude=77.6948,
             address="Bommasandra, Bengaluru",
             phone="+91-80-71222222",
             website="https://www.narayanahealth.org",
@@ -335,6 +453,8 @@ def fallback_facilities() -> list[Facility]:
             district="South East Delhi",
             city="New Delhi",
             pincode="110025",
+            latitude=28.5613,
+            longitude=77.2749,
             address="Okhla Road, New Delhi",
             phone="+91-11-47135000",
             website="https://www.fortishealthcare.com",
@@ -353,6 +473,8 @@ def fallback_facilities() -> list[Facility]:
             district="Chennai",
             city="Chennai",
             pincode="600006",
+            latitude=13.0632,
+            longitude=80.2514,
             address="Greams Road, Chennai",
             phone="+91-44-28290200",
             website="https://www.apollohospitals.com",
@@ -371,6 +493,8 @@ def fallback_facilities() -> list[Facility]:
             district="Mumbai Suburban",
             city="Mumbai",
             pincode="400053",
+            latitude=19.1312,
+            longitude=72.8258,
             address="Andheri West, Mumbai",
             phone="+91-22-42699999",
             website="https://www.kokilabenhospital.com",
@@ -389,6 +513,8 @@ def fallback_facilities() -> list[Facility]:
             district="Bengaluru Urban",
             city="Bengaluru",
             pincode="560011",
+            latitude=12.9250,
+            longitude=77.5938,
             address="Jayanagar, Bengaluru",
             phone="+91-80-67999999",
             website="https://www.cloudninecare.com",
@@ -407,6 +533,8 @@ def fallback_facilities() -> list[Facility]:
             district="New Delhi",
             city="New Delhi",
             pincode="110029",
+            latitude=28.5672,
+            longitude=77.2100,
             address="Ansari Nagar, New Delhi",
             phone="+91-11-26588500",
             website="https://www.aiims.edu",
@@ -425,6 +553,8 @@ def fallback_facilities() -> list[Facility]:
             district="Hyderabad",
             city="Hyderabad",
             pincode="500034",
+            latitude=17.4126,
+            longitude=78.4482,
             address="Banjara Hills, Hyderabad",
             phone="+91-40-44556677",
             website=None,
@@ -461,6 +591,27 @@ def _first(row: dict[str, Any], *keys: str) -> Any:
         if value not in [None, ""]:
             return value
     return None
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        if value in [None, ""]:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _specialty_group(procedure_id: str) -> str:
+    return {
+        "eye_care": "Ophthalmology",
+        "cardiac_surgery": "Cardiology / CTVS",
+        "icu_critical_care": "Critical Care",
+        "dialysis": "Nephrology",
+        "oncology": "Oncology",
+        "maternity_obgyn": "Maternity / OBGYN",
+        "emergency_trauma": "Emergency / Trauma",
+    }.get(procedure_id, "General")
 
 
 def _string_or_none(value: Any) -> str | None:

@@ -2,398 +2,144 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
-const SERVICES = [
-  { id: 'eye_care', label: 'Eye surgery / eye care', short: 'Eye surgery' },
-  { id: 'cardiac_surgery', label: 'Cardiac surgery', short: 'Cardiac surgery' },
+const SERVICE_FALLBACK = [
+  { service_id: 'cardiac_surgery', service_label: 'Cardiac surgery', specialty_group: 'Cardiology / CTVS' },
+  { service_id: 'eye_care', service_label: 'Eye surgery / eye care', specialty_group: 'Ophthalmology' },
+  { service_id: 'icu_critical_care', service_label: 'ICU / critical care', specialty_group: 'Critical Care' },
+  { service_id: 'dialysis', service_label: 'Dialysis', specialty_group: 'Nephrology' },
+  { service_id: 'oncology', service_label: 'Oncology', specialty_group: 'Oncology' },
+  { service_id: 'maternity_obgyn', service_label: 'Maternity / OBGYN', specialty_group: 'Maternity / OBGYN' },
+  { service_id: 'emergency_trauma', service_label: 'Emergency / trauma', specialty_group: 'Emergency / Trauma' },
 ];
-
-const REGIONS = [
-  { value: '', label: 'All India' },
-  { value: 'Delhi', label: 'Delhi' },
-  { value: 'Karnataka', label: 'Karnataka' },
-  { value: 'Maharashtra', label: 'Maharashtra' },
-  { value: 'Tamil Nadu', label: 'Tamil Nadu' },
-  { value: 'Telangana', label: 'Telangana' },
-];
-
-const AGE_GROUPS = [
+const AGE_FALLBACK = [
   { value: 'all', label: 'All age groups' },
-  { value: 'child', label: 'Children' },
+  { value: 'child', label: 'Children / pediatric' },
   { value: 'adult', label: 'Adults' },
   { value: 'senior', label: 'Seniors' },
 ];
-
 const TABS = [
-  { id: 'explorer', label: 'Procedure Explorer' },
-  { id: 'trust', label: 'Trust Cards' },
-  { id: 'verification', label: 'Human Verification' },
+  { id: 'explorer', label: 'Explorer' },
+  { id: 'map', label: 'Map + Radius' },
+  { id: 'trust', label: 'Trust Card' },
+  { id: 'verification', label: 'Verification' },
   { id: 'assistant', label: 'Chart Assistant' },
   { id: 'shortlists', label: 'Shortlists' },
 ];
-
 const fallbackFacilities = [
-  {
-    unique_id: 'aravind-eye-hospital',
-    rank: 1,
-    name: 'Aravind Eye Hospital',
-    city: 'Hyderabad',
-    state: 'Telangana',
-    score: 8.7,
-    confidence_label: 'Human verified',
-    human_verified: true,
-    evidence_summary: 'Ophthalmology, cataract, retina and diagnostic evidence appear in facility text.',
-    source_urls: ['https://example.org/source/aravind'],
-    uncertainty_flags: ['Some source text may be aggregated from multiple pages'],
-    score_breakdown: {
-      specialties: 1.5,
-      procedure: 1.4,
-      equipment: 0.9,
-      capability: 0.9,
-      description: 1,
-      sources: 0.9,
-      contact: 0.7,
-      location: 0.5,
-      human: 1.0,
-      freshness: 0.1,
-    },
-  },
-  {
-    unique_id: 'sankara-nethralaya',
-    rank: 2,
-    name: 'Sankara Nethralaya',
-    city: 'Chennai',
-    state: 'Tamil Nadu',
-    score: 8.3,
-    confidence_label: 'High',
-    evidence_summary: 'Specialty and procedure fields strongly support eye care capability.',
-    source_urls: ['https://example.org/source/sankara'],
-    uncertainty_flags: ['Verify live availability before referral'],
-    score_breakdown: { specialties: 1.5, procedure: 1.5, equipment: 0.7, capability: 0.9, description: 0.8, sources: 0.9, contact: 0.75, location: 0.5, human: 0.5, freshness: 0.25 },
-  },
-  {
-    unique_id: 'lv-prasad-eye-institute',
-    rank: 3,
-    name: 'LV Prasad Eye Institute',
-    city: 'Hyderabad',
-    state: 'Telangana',
-    score: 7.9,
-    confidence_label: 'Medium',
-    evidence_summary: 'Strong source URLs and equipment mentions, with some uncertainty.',
-    source_urls: ['https://example.org/source/lvpei'],
-    uncertainty_flags: ['Needs procedure-specific human verification'],
-    score_breakdown: { specialties: 1.4, procedure: 1.2, equipment: 0.8, capability: 0.8, description: 0.9, sources: 0.8, contact: 0.7, location: 0.5, human: 0.5, freshness: 0.3 },
-  },
+  { unique_id: 'fallback-aravind-madurai', name: 'Aravind Eye Hospital, Madurai', country: 'India', state: 'Tamil Nadu', city: 'Madurai', pincode: '625020', latitude: 9.9252, longitude: 78.1198, score: 8.5, confidence_label: 'High', specialties: ['Ophthalmology'], evidence_summary: 'Cataract, retina, glaucoma and ophthalmic equipment evidence appears in source fields.', source_urls: ['https://aravind.org/hospitals/madurai/'], uncertainty_flags: ['Verify live procedure availability before referral.'] },
+  { unique_id: 'fallback-narayana-bengaluru', name: 'Narayana Institute of Cardiac Sciences', country: 'India', state: 'Karnataka', city: 'Bengaluru', pincode: '560099', latitude: 12.811, longitude: 77.6948, score: 8.2, confidence_label: 'High', specialties: ['Cardiology / CTVS'], evidence_summary: 'Cardiac surgery, cath lab, cardiac ICU and coronary intervention evidence found.', source_urls: ['https://www.narayanahealth.org'], uncertainty_flags: ['Human verification recommended for current surgical capacity.'] },
+  { unique_id: 'fallback-fortis-delhi', name: 'Fortis Escorts Heart Institute', country: 'India', state: 'Delhi', city: 'New Delhi', pincode: '110025', latitude: 28.5613, longitude: 77.2749, score: 7.8, confidence_label: 'Medium', specialties: ['Cardiology / CTVS'], evidence_summary: 'Heart institute with cardiac surgery and critical care source evidence.', source_urls: ['https://www.fortishealthcare.com'], uncertainty_flags: ['Confirm procedure-specific eligibility and referral pathway.'] },
 ];
-
 const api = async (path, options) => {
   const res = await fetch(path, { headers: { 'content-type': 'application/json' }, ...options });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return res.json();
 };
-
+const fmt = (value) => Number(value || 0).toFixed(1);
 function displayConfidence(f = {}) {
   if (f.human_verified || f.human_verification_status === 'verified') return 'Human verified';
-  if ((f.score || f.final_score || 0) >= 8) return 'High';
-  if ((f.score || f.final_score || 0) >= 6) return 'Medium';
+  const score = Number(f.score || f.final_score || 0);
+  if (score >= 8) return 'High';
+  if (score >= 6) return 'Medium';
   return f.confidence_label || 'Needs review';
 }
-
 function classForConfidence(label = '') {
-  const text = label.toLowerCase();
-  if (text.includes('verified') || text.includes('high')) return 'hi';
-  if (text.includes('medium')) return 'med';
+  const t = label.toLowerCase();
+  if (t.includes('verified') || t.includes('high')) return 'hi';
+  if (t.includes('medium')) return 'med';
   return 'low';
 }
-
-function ScorePill({ score }) {
-  return <div className="score">{Number(score || 0).toFixed(1)}</div>;
+function normalizeFacility(f, rank) {
+  return { ...f, rank: f.rank || rank + 1, country: f.country || 'India', latitude: toNum(f.latitude), longitude: toNum(f.longitude), score: Number(f.score || f.final_score || 0) };
+}
+function toNum(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
+function distanceKm(a, b) {
+  if (![a?.latitude, a?.longitude, b?.latitude, b?.longitude].every((v) => Number.isFinite(Number(v)))) return null;
+  const R = 6371, dLat = rad(b.latitude - a.latitude), dLon = rad(b.longitude - a.longitude);
+  const lat1 = rad(a.latitude), lat2 = rad(b.latitude);
+  const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+const rad = (d) => d * Math.PI / 180;
+function projectPoint(f) {
+  const lat = Number(f.latitude), lon = Number(f.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return { left: 50, top: 50 };
+  const left = Math.max(4, Math.min(96, ((lon - 68) / (98 - 68)) * 100));
+  const top = Math.max(4, Math.min(96, (1 - ((lat - 6) / (37 - 6))) * 100));
+  return { left, top };
 }
 
-function Layout({ children, activeTab, onTabChange, serviceLabel, onPlayVoice }) {
-  return (
-    <div className="appShell">
-      <header className="topbar">
-        <div className="brandBlock">
-          <div className="brand">Care<span>Signal</span></div>
-          <p>Evidence-backed facility rankings with human verification.</p>
-        </div>
-        <nav className="tabs" aria-label="CareSignal sections">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={activeTab === tab.id ? 'active' : ''}
-              onClick={() => onTabChange(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-        <div className="callTop">
-          <span>Digital Call Assistant</span>
-          <a href="tel:+14155550126">Call CareSignal</a>
-          <button onClick={onPlayVoice}>Play voice</button>
-          <small>Verify rankings and evidence for {serviceLabel}.</small>
-        </div>
-      </header>
-      <main className="main">{children}</main>
-    </div>
-  );
+function AppHeader({ activeTab, setActiveTab, onPlayVoice }) {
+  return <header className="topbar">
+    <div className="brandBlock"><div className="brand">Care<span>Signal</span></div><p>Facility trust desk for evidence, uncertainty, and human verification.</p></div>
+    <nav className="tabs" aria-label="Main sections">{TABS.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav>
+    <div className="callTop"><b>Digital call assistant</b><a href="tel:+14155550126">Call CareSignal</a><button onClick={onPlayVoice}>Play voice</button></div>
+  </header>;
 }
-
-function FilterBar({ region, setRegion, service, setService, ageGroup, setAgeGroup }) {
-  return (
-    <section className="filterCard" aria-label="Facility filters">
-      <label>
-        <span>1. Region</span>
-        <select value={region} onChange={(e) => setRegion(e.target.value)}>
-          {REGIONS.map((r) => <option key={r.label} value={r.value}>{r.label}</option>)}
-        </select>
-      </label>
-      <label>
-        <span>2. Service</span>
-        <select value={service} onChange={(e) => setService(e.target.value)}>
-          {SERVICES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-        </select>
-      </label>
-      <label>
-        <span>3. Age group</span>
-        <select value={ageGroup} onChange={(e) => setAgeGroup(e.target.value)}>
-          {AGE_GROUPS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
-        </select>
-      </label>
-    </section>
-  );
+function FilterBar({ filters, values, setters, services }) {
+  const opts = (items, allLabel) => [{ value: '', label: allLabel }, ...(items || [])];
+  return <section className="filterCard">
+    <label><span>1. Country</span><select value={values.country} onChange={(e) => setters.setCountry(e.target.value)}>{opts(filters.countries, 'All countries').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
+    <label><span>2. State / region</span><select value={values.state} onChange={(e) => setters.setState(e.target.value)}>{opts(filters.states, 'All states').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
+    <label><span>3. City</span><select value={values.city} onChange={(e) => setters.setCity(e.target.value)}>{opts(filters.cities, 'All cities').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
+    <label><span>4. Postal code</span><select value={values.pincode} onChange={(e) => setters.setPincode(e.target.value)}>{opts(filters.pincodes, 'All postal codes').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
+    <label><span>5. Service</span><select value={values.service} onChange={(e) => setters.setService(e.target.value)}>{services.map((s) => <option key={s.service_id} value={s.service_id}>{s.service_label}</option>)}</select></label>
+    <label><span>6. Age group</span><select value={values.ageGroup} onChange={(e) => setters.setAgeGroup(e.target.value)}>{(filters.age_groups || AGE_FALLBACK).map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}</select></label>
+  </section>;
 }
-
-function Metrics({ facilities, regionLabel, ageLabel }) {
-  const top = facilities[0]?.score ?? 0;
-  const verified = facilities.filter((f) => f.human_verified || f.human_verification_status === 'verified' || String(f.confidence_label).toLowerCase().includes('verified')).length;
-  return (
-    <div className="metricrow">
-      <div className="metric"><strong>10,088</strong><small>facilities indexed</small></div>
-      <div className="metric"><strong>{facilities.length}</strong><small>current matches</small></div>
-      <div className="metric"><strong>{Number(top).toFixed(1)}</strong><small>top score / 10</small></div>
-      <div className="metric"><strong>{verified}</strong><small>human verified shown</small></div>
-      <div className="metric wide"><strong>{regionLabel}</strong><small>selected region</small></div>
-      <div className="metric wide"><strong>{ageLabel}</strong><small>selected age group</small></div>
-    </div>
-  );
+function Metrics({ facilities, selected, radius }) {
+  const verified = facilities.filter((f) => displayConfidence(f) === 'Human verified').length;
+  return <div className="metricrow">
+    <div className="metric"><strong>{facilities.length}</strong><small>visible facilities</small></div>
+    <div className="metric"><strong>{fmt(facilities[0]?.score)}</strong><small>top score / 10</small></div>
+    <div className="metric"><strong>{verified}</strong><small>human verified</small></div>
+    <div className="metric"><strong>{radius} km</strong><small>map radius</small></div>
+    <div className="metric wide"><strong>{selected?.name || 'None'}</strong><small>radius center</small></div>
+  </div>;
 }
-
-function FacilityRankingTable({ facilities, selectedId, onSelect }) {
-  return (
-    <section className="card rankings">
-      <div className="cardTitle"><h2>Ranked facilities</h2><span>Top 10 by service</span></div>
-      <table className="rank">
-        <thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Score</th><th>Confidence</th></tr></thead>
-        <tbody>
-          {facilities.map((f, i) => (
-            <tr key={f.unique_id} className={selectedId === f.unique_id ? 'selected' : ''} onClick={() => onSelect(f)}>
-              <td>#{f.rank || i + 1}</td>
-              <td><b>{f.name}</b><br /><small>{f.evidence_summary || f.description || (f.evidence_snippets || []).slice(0, 1).join(' ')}</small></td>
-              <td>{f.city || f.address_city || 'Unknown'}, {f.state || f.address_stateOrRegion || 'India'}</td>
-              <td><ScorePill score={f.score || f.final_score} /></td>
-              <td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{displayConfidence(f)}</span></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {!facilities.length && <p className="empty">No facilities match this region/service combination yet.</p>}
-    </section>
-  );
+function FacilityTable({ facilities, selected, setSelected }) {
+  return <section className="card rankings"><div className="cardTitle"><h2>Ranked facilities</h2><span>Top facilities by selected service</span></div><table className="rank"><thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Score</th><th>Status</th></tr></thead><tbody>{facilities.map((f, i) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => setSelected(f)}><td>#{i + 1}</td><td><b>{f.name}</b><small>{f.evidence_summary || (f.evidence_snippets || [])[0] || f.description || 'Evidence extracted from facility fields.'}</small></td><td>{[f.city, f.state, f.pincode].filter(Boolean).join(', ')}</td><td><b>{fmt(f.score)}</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{displayConfidence(f)}</span></td></tr>)}</tbody></table>{!facilities.length && <p className="empty">No facilities match these filters. Try All states or a wider service.</p>}</section>;
 }
-
 function TrustCard({ facility, serviceLabel }) {
-  if (!facility) return null;
-  const rawBreakdown = facility.score_breakdown || {};
-  const entries = Array.isArray(rawBreakdown)
-    ? rawBreakdown.map((item) => [item.label || item.key, item.score ?? 0, item.max_score])
-    : Object.entries(rawBreakdown).map(([key, val]) => [key, val, undefined]);
-  return (
-    <aside className="card trust">
-      <div className="trustHeader">
-        <div><h2>Trust Card</h2><small>Why this facility ranks here</small></div>
-        <ScorePill score={facility.score || facility.final_score} />
-      </div>
-      <p><b>Claim:</b> {facility.name} appears to support {serviceLabel}.</p>
-      <div className="evidence">{facility.evidence_summary || (facility.evidence_snippets || []).slice(0, 2).join(' ') || facility.description || 'Evidence appears in facility text fields.'}</div>
-      <div className="why">
-        {entries.slice(0, 10).map(([key, val, max]) => <div key={key}><b>+{Number(val || 0).toFixed(2)}{max ? `/${max}` : ''}</b><br />{key}</div>)}
-      </div>
-      <div className="sources">
-        <b>Sources</b>
-        {(facility.source_urls || [facility.source_url, facility.website].filter(Boolean)).slice(0, 3).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>)}
-      </div>
-      <p className="footer"><b>Uncertainty:</b> {(facility.uncertainty_flags || ['Treat extracted claims as claims to verify, not ground truth.']).join('; ')}</p>
-    </aside>
-  );
+  if (!facility) return <section className="card"><h2>Trust Card</h2><p>Select a facility to inspect evidence.</p></section>;
+  const raw = facility.score_breakdown || [];
+  const entries = Array.isArray(raw) ? raw.map((x) => [x.label || x.key, x.score || 0, x.max_score]) : Object.entries(raw).map(([k, v]) => [k, v]);
+  const sources = facility.source_urls || [facility.source_url, facility.website].filter(Boolean);
+  return <aside className="card trust"><div className="trustHeader"><div><h2>Trust Card</h2><small>{facility.name}</small></div><div className="score">{fmt(facility.score)}</div></div><p><b>Claim:</b> Supports {serviceLabel}.</p><div className="evidence">{(facility.evidence_snippets || []).slice(0, 2).join(' ') || facility.evidence_summary || facility.description || 'Evidence appears in extracted facility text.'}</div><div className="why">{entries.slice(0, 8).map(([k, v, m]) => <div key={k}><b>{Number(v || 0).toFixed(2)}{m ? `/${m}` : ''}</b><span>{k}</span></div>)}</div><div className="sources"><b>Sources</b>{sources.slice(0, 3).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>)}</div><p className="footer"><b>Uncertainty:</b> {(facility.uncertainty_flags || ['Treat extracted claims as claims to verify, not ground truth.']).join('; ')}</p></aside>;
 }
-
+function RadiusMap({ facilities, selected, setSelected, radius, setRadius }) {
+  const center = selected || facilities[0];
+  const visible = facilities.filter((f) => { const d = distanceKm(center, f); return d === null || d <= radius || f.unique_id === center?.unique_id; });
+  const c = projectPoint(center || {});
+  return <section className="card mapCard"><div className="cardTitle"><h2>Interactive map radius</h2><span>{visible.length} facilities inside radius</span></div><div className="radiusControl"><label>Radius: <b>{radius} km</b><input type="range" min="25" max="750" step="25" value={radius} onChange={(e) => setRadius(Number(e.target.value))} /></label></div><div className="mapCanvas"><div className="indiaLabel">India facility view</div><div className="radiusCircle" style={{ left: `${c.left}%`, top: `${c.top}%`, width: `${Math.min(78, radius / 8)}%`, height: `${Math.min(78, radius / 8)}%` }} />{visible.map((f) => { const p = projectPoint(f); return <button key={f.unique_id} className={`pin ${selected?.unique_id === f.unique_id ? 'active' : ''}`} style={{ left: `${p.left}%`, top: `${p.top}%` }} onClick={() => setSelected(f)} title={`${f.name} • ${fmt(f.score)}`}>{selected?.unique_id === f.unique_id ? '★' : '•'}</button>; })}</div><div className="mapList">{visible.slice(0, 8).map((f) => <button key={f.unique_id} onClick={() => setSelected(f)}><b>{f.name}</b><span>{distanceKm(center, f)?.toFixed(0) || 0} km • {f.city || f.state}</span></button>)}</div></section>;
+}
 function VerificationForm({ facility, service, serviceLabel, onVerified }) {
-  const [status, setStatus] = useState('verified');
-  const [notes, setNotes] = useState('Verified by phone or visit.');
+  const [status, setStatus] = useState('verified'); const [notes, setNotes] = useState('Verified by phone or visit.');
   if (!facility) return null;
-  const submit = async () => {
-    const payload = {
-      unique_id: facility.unique_id,
-      facility_name: facility.name,
-      procedure: service,
-      status,
-      verifier_name: 'CareSignal demo user',
-      notes,
-    };
-    try { await api('/api/verifications', { method: 'POST', body: JSON.stringify(payload) }); } catch (_) {}
-    onVerified(payload);
-  };
-  return (
-    <section className="card verification">
-      <div className="cardTitle"><h2>Human verification</h2><span>{facility.name}</span></div>
-      <p>Call or visit the facility, verify {serviceLabel} capability, then update CareSignal so future rankings improve.</p>
-      <div className="checklist">
-        <label><input type="checkbox" /> Staff confirmed this service is currently available</label>
-        <label><input type="checkbox" /> Required equipment/facilities observed or confirmed</label>
-        <label><input type="checkbox" /> Specialists or referral pathway confirmed</label>
-      </div>
-      <select value={status} onChange={(e) => setStatus(e.target.value)}>
-        <option value="verified">Verified</option>
-        <option value="needs_review">Needs review</option>
-        <option value="rejected">Rejected</option>
-      </select>
-      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
-      <button onClick={submit}>Submit verification</button>
-    </section>
-  );
+  const submit = async () => { const payload = { unique_id: facility.unique_id, procedure: service, status, verifier_name: 'CareSignal demo user', notes }; try { await api('/api/verifications', { method: 'POST', body: JSON.stringify(payload) }); } catch (_) {} onVerified(status); };
+  return <section className="card verification"><div className="cardTitle"><h2>Human verification</h2><span>{facility.name}</span></div><p>Call or visit the facility, verify {serviceLabel}, then feed confirmed facts back into ranking.</p><div className="checklist"><label><input type="checkbox" /> Service currently available</label><label><input type="checkbox" /> Equipment/facilities confirmed</label><label><input type="checkbox" /> Specialists/referral pathway confirmed</label></div><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="verified">Verified</option><option value="needs_review">Needs review</option><option value="rejected">Rejected</option></select><textarea value={notes} onChange={(e) => setNotes(e.target.value)} /><button onClick={submit}>Submit verification</button></section>;
 }
-
-function VoiceAssistantPanel({ facility, serviceLabel, onPlayVoice }) {
-  return (
-    <section className="card assistant voicePanel">
-      <div className="cardTitle"><h2>CareSignal Voice</h2><span>Digital call assistant</span></div>
-      <div className="bubble">User calls CareSignal and asks why {facility?.name || 'this facility'} ranks this way for {serviceLabel}.</div>
-      <div className="bubble">The assistant reads evidence, uncertainty, and a verification checklist using TTS.</div>
-      <button onClick={onPlayVoice}>Play sample human voice</button>
-    </section>
-  );
+function AssistantPanel({ service, serviceLabel, selected }) {
+  const [question, setQuestion] = useState(`Show top ${serviceLabel} facilities and explain evidence.`); const [answer, setAnswer] = useState(null);
+  const ask = async () => { try { setAnswer(await api('/api/assistant/query', { method: 'POST', body: JSON.stringify({ question, procedure: service, unique_id: selected?.unique_id }) })); } catch (_) { setAnswer({ answer: 'Rankings combine evidence fields, sources, contactability, location completeness and human verification.', data: [] }); } };
+  return <section className="card chartAssistant"><div className="cardTitle"><h2>Conversational chart assistant</h2><span>Safe query templates</span></div><textarea value={question} onChange={(e) => setQuestion(e.target.value)} /><button onClick={ask}>Generate answer</button>{answer && <div className="assistantAnswer"><p>{answer.answer}</p><div className="bars">{(answer.data || []).slice(0, 6).map((row, i) => <div key={row.facility || row.name || i}><span>{row.facility || row.name || row.state}</span><i style={{ width: `${Math.min(100, (row.score || row.average_score || 5) * 10)}%` }} /></div>)}</div></div>}</section>;
 }
-
-function ChartAssistant({ service, serviceLabel, regionLabel, ageLabel }) {
-  const [question, setQuestion] = useState(`Show top 10 ${serviceLabel} facilities in ${regionLabel} for ${ageLabel} and explain why they rank high.`);
-  const [answer, setAnswer] = useState(null);
-  useEffect(() => {
-    setQuestion(`Show top 10 ${serviceLabel} facilities in ${regionLabel} for ${ageLabel} and explain why they rank high.`);
-  }, [serviceLabel, regionLabel, ageLabel]);
-  const ask = async () => {
-    try {
-      setAnswer(await api('/api/assistant/query', { method: 'POST', body: JSON.stringify({ question, procedure: service }) }));
-    } catch (_) {
-      setAnswer({ answer: `Top ${serviceLabel} facilities are ranked by evidence support, source quality, contactability, location completeness, and human verification.`, data: fallbackFacilities });
-    }
-  };
-  return (
-    <section className="card chartAssistant">
-      <div className="cardTitle"><h2>Ask the chart assistant</h2><span>Tables + explanations</span></div>
-      <textarea value={question} onChange={(e) => setQuestion(e.target.value)} />
-      <button onClick={ask}>Generate chart and explanation</button>
-      {answer && <div className="assistantAnswer"><p>{answer.answer}</p><div className="bars">{(answer.data || []).slice(0, 5).map((row) => <div key={row.unique_id || row.name}><span>{row.name}</span><i style={{ width: `${Math.min(100, (row.score || row.final_score || 5) * 10)}%` }} /></div>)}</div></div>}
-    </section>
-  );
-}
-
-function ShortlistPanel({ selected, shortlists, onAddShortlist }) {
-  return (
-    <section className="card shortlistPanel">
-      <div className="cardTitle"><h2>Shortlists</h2><span>Planner decisions</span></div>
-      <p>Save facilities that should be reviewed, trusted, or used in a planning scenario.</p>
-      <button onClick={onAddShortlist} disabled={!selected}>Add selected facility</button>
-      <div className="shortlistItems">
-        {shortlists.map((item) => (
-          <div key={item.id} className="shortlistItem"><b>{item.name}</b><small>{item.serviceLabel} • {item.regionLabel}</small></div>
-        ))}
-        {!shortlists.length && <p className="empty">No shortlist items yet.</p>}
-      </div>
-    </section>
-  );
-}
+function Shortlists({ selected, shortlists, onAdd }) { return <section className="card"><div className="cardTitle"><h2>Shortlists</h2><span>Planner decisions</span></div><button onClick={onAdd} disabled={!selected}>Add selected facility</button><div className="shortlistItems">{shortlists.map((x) => <div key={x.id} className="shortlistItem"><b>{x.name}</b><small>{x.meta}</small></div>)}{!shortlists.length && <p className="empty">No shortlisted facilities yet.</p>}</div></section>; }
+function ServiceTable({ services }) { return <section className="card"><div className="cardTitle"><h2>Services grouped by specialty</h2><span>Derived table preview</span></div><table className="rank"><thead><tr><th>Service</th><th>Specialty group</th><th>Keywords</th></tr></thead><tbody>{services.map((s) => <tr key={s.service_id}><td>{s.service_label}</td><td>{s.specialty_group}</td><td><small>{s.keywords}</small></td></tr>)}</tbody></table></section>; }
 
 function App() {
-  const [service, setService] = useState('eye_care');
-  const [region, setRegion] = useState('');
-  const [ageGroup, setAgeGroup] = useState('all');
   const [activeTab, setActiveTab] = useState('explorer');
-  const [facilities, setFacilities] = useState(fallbackFacilities);
-  const [selected, setSelected] = useState(fallbackFacilities[0]);
-  const [shortlists, setShortlists] = useState([]);
-
-  const serviceDef = useMemo(() => SERVICES.find((p) => p.id === service) || SERVICES[0], [service]);
-  const serviceLabel = serviceDef.short;
-  const regionLabel = useMemo(() => REGIONS.find((r) => r.value === region)?.label || 'All India', [region]);
-  const ageLabel = useMemo(() => AGE_GROUPS.find((a) => a.value === ageGroup)?.label || 'All age groups', [ageGroup]);
-
-  useEffect(() => {
-    let mounted = true;
-    const params = new URLSearchParams({ procedure: service, limit: '10' });
-    if (region) params.set('state', region);
-    api(`/api/facilities/top?${params.toString()}`)
-      .then((data) => {
-        const rows = data.facilities || data.data || data;
-        if (mounted && Array.isArray(rows) && rows.length) {
-          const ranked = rows.map((f, i) => ({ ...f, rank: f.rank || i + 1 }));
-          setFacilities(ranked);
-          setSelected(ranked[0]);
-        } else if (mounted) {
-          setFacilities([]);
-          setSelected(null);
-        }
-      })
-      .catch(() => {
-        if (mounted) {
-          const local = fallbackFacilities
-            .filter((f) => !region || f.state === region)
-            .map((f, i) => ({ ...f, rank: i + 1 }));
-          setFacilities(local);
-          setSelected(local[0] || null);
-        }
-      });
-    return () => { mounted = false; };
-  }, [service, region]);
-
-  const playVoice = async () => {
-    const audio = new Audio('/api/voice/sample');
-    try { await audio.play(); } catch { window.open('/api/voice/sample', '_blank'); }
-  };
-
-  const onVerified = () => {
-    if (!selected) return;
-    const updated = { ...selected, human_verified: true, human_verification_status: 'verified', confidence_label: 'Human verified', score: Math.min(10, Number(selected.score || 0) + 1.5) };
-    setSelected(updated);
-    setFacilities((rows) => rows.map((f) => f.unique_id === updated.unique_id ? updated : f).sort((a, b) => (b.score || 0) - (a.score || 0)).map((f, i) => ({ ...f, rank: i + 1 })));
-  };
-
-  const addShortlist = async () => {
-    if (!selected) return;
-    const item = { id: `${selected.unique_id}-${Date.now()}`, name: selected.name, serviceLabel, regionLabel };
-    setShortlists((items) => [item, ...items]);
-    try {
-      await api('/api/shortlists', { method: 'POST', body: JSON.stringify({ unique_id: selected.unique_id, procedure: service, notes: `${serviceLabel} shortlist for ${regionLabel}` }) });
-    } catch (_) {}
-  };
-
-  return (
-    <Layout activeTab={activeTab} onTabChange={setActiveTab} serviceLabel={serviceLabel} onPlayVoice={playVoice}>
-      <div className="hero">
-        <div className="title"><h1>Top facilities for {serviceLabel}</h1><p>Ranked by evidence quality, uncertainty, and human verification. Score is out of 10.</p></div>
-        <FilterBar region={region} setRegion={setRegion} service={service} setService={setService} ageGroup={ageGroup} setAgeGroup={setAgeGroup} />
-      </div>
-      <Metrics facilities={facilities} regionLabel={regionLabel} ageLabel={ageLabel} />
-
-      {activeTab === 'explorer' && <div className="grid"><FacilityRankingTable facilities={facilities} selectedId={selected?.unique_id} onSelect={setSelected} /><TrustCard facility={selected} serviceLabel={serviceLabel} /></div>}
-      {activeTab === 'trust' && <div className="grid"><TrustCard facility={selected} serviceLabel={serviceLabel} /><FacilityRankingTable facilities={facilities} selectedId={selected?.unique_id} onSelect={setSelected} /></div>}
-      {activeTab === 'verification' && <div className="grid"><VerificationForm facility={selected} service={service} serviceLabel={serviceLabel} onVerified={onVerified} /><VoiceAssistantPanel facility={selected} serviceLabel={serviceLabel} onPlayVoice={playVoice} /></div>}
-      {activeTab === 'assistant' && <div className="grid"><ChartAssistant service={service} serviceLabel={serviceLabel} regionLabel={regionLabel} ageLabel={ageLabel} /><VoiceAssistantPanel facility={selected} serviceLabel={serviceLabel} onPlayVoice={playVoice} /></div>}
-      {activeTab === 'shortlists' && <div className="grid"><ShortlistPanel selected={selected} shortlists={shortlists} onAddShortlist={addShortlist} /><TrustCard facility={selected} serviceLabel={serviceLabel} /></div>}
-    </Layout>
-  );
+  const [filters, setFilters] = useState({ countries: [{ value: 'India', label: 'India' }], states: [], cities: [], pincodes: [], services: SERVICE_FALLBACK, age_groups: AGE_FALLBACK });
+  const [country, setCountry] = useState('India'), [state, setState] = useState(''), [city, setCity] = useState(''), [pincode, setPincode] = useState(''), [service, setService] = useState('cardiac_surgery'), [ageGroup, setAgeGroup] = useState('all');
+  const [facilities, setFacilities] = useState(fallbackFacilities); const [selected, setSelected] = useState(fallbackFacilities[0]); const [radius, setRadius] = useState(250); const [shortlists, setShortlists] = useState([]);
+  const services = filters.services?.length ? filters.services : SERVICE_FALLBACK;
+  const serviceDef = services.find((s) => s.service_id === service) || services[0]; const serviceLabel = serviceDef?.service_label || 'Selected service';
+  useEffect(() => { api('/api/filters').then((data) => { setFilters((old) => ({ ...old, ...data })); }).catch(() => {}); }, []);
+  useEffect(() => { let mounted = true; const params = new URLSearchParams({ procedure: service, limit: '100' }); if (country) params.set('country', country); if (state) params.set('state', state); if (city) params.set('city', city); if (pincode) params.set('pincode', pincode); if (ageGroup) params.set('age_group', ageGroup); api(`/api/facilities/top?${params}`).then((data) => { const rows = (Array.isArray(data) ? data : data.facilities || data.data || []).map(normalizeFacility); if (mounted) { setFacilities(rows); setSelected(rows[0] || null); } }).catch(() => { const rows = fallbackFacilities.map(normalizeFacility).filter((f) => (!country || f.country === country) && (!state || f.state === state) && (!city || f.city === city) && (!pincode || f.pincode === pincode)); if (mounted) { setFacilities(rows); setSelected(rows[0] || null); } }); return () => { mounted = false; }; }, [country, state, city, pincode, service, ageGroup]);
+  const playVoice = async () => { const audio = new Audio('/api/voice/sample'); try { await audio.play(); } catch { window.open('/api/voice/sample', '_blank'); } };
+  const onVerified = (status) => { if (!selected) return; const delta = status === 'verified' ? 1.5 : status === 'rejected' ? -2 : 0.5; const updated = { ...selected, human_verification_status: status, human_verified: status === 'verified', score: Math.max(0, Math.min(10, Number(selected.score || 0) + delta)) }; setSelected(updated); setFacilities((rows) => rows.map((f) => f.unique_id === updated.unique_id ? updated : f).sort((a, b) => b.score - a.score)); };
+  const addShortlist = async () => { if (!selected) return; setShortlists((x) => [{ id: `${selected.unique_id}-${Date.now()}`, name: selected.name, meta: `${serviceLabel} • ${selected.city || selected.state || 'India'}` }, ...x]); try { await api('/api/shortlists', { method: 'POST', body: JSON.stringify({ unique_id: selected.unique_id, procedure: service, notes: `${serviceLabel} shortlist` }) }); } catch (_) {} };
+  return <><AppHeader activeTab={activeTab} setActiveTab={setActiveTab} onPlayVoice={playVoice} /><main className="main"><section className="hero"><div><p className="eyebrow">Facility Trust Desk</p><h1>Professional facility rankings by region, service, age group and radius.</h1><p>Use source-table-derived dropdowns to find facilities, inspect evidence, verify claims, and view nearby options on an interactive map.</p></div><FilterBar filters={filters} values={{ country, state, city, pincode, service, ageGroup }} setters={{ setCountry, setState, setCity, setPincode, setService, setAgeGroup }} services={services} /></section><Metrics facilities={facilities} selected={selected} radius={radius} />{activeTab === 'explorer' && <div className="grid"><FacilityTable facilities={facilities} selected={selected} setSelected={setSelected} /><TrustCard facility={selected} serviceLabel={serviceLabel} /></div>}{activeTab === 'map' && <div className="grid"><RadiusMap facilities={facilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} /><TrustCard facility={selected} serviceLabel={serviceLabel} /></div>}{activeTab === 'trust' && <div className="grid"><TrustCard facility={selected} serviceLabel={serviceLabel} /><ServiceTable services={services} /></div>}{activeTab === 'verification' && <div className="grid"><VerificationForm facility={selected} service={service} serviceLabel={serviceLabel} onVerified={onVerified} /><TrustCard facility={selected} serviceLabel={serviceLabel} /></div>}{activeTab === 'assistant' && <div className="grid"><AssistantPanel service={service} serviceLabel={serviceLabel} selected={selected} /><RadiusMap facilities={facilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} /></div>}{activeTab === 'shortlists' && <div className="grid"><Shortlists selected={selected} shortlists={shortlists} onAdd={addShortlist} /><ServiceTable services={services} /></div>}</main></>;
 }
 
 createRoot(document.getElementById('root')).render(<App />);

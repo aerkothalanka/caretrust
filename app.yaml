@@ -9,4 +9,6 @@ env:
   - name: CARESIGNAL_FALLBACK_ON_ERROR
     value: "true"
   - name: CARESIGNAL_DATABRICKS_LIMIT
-    value: "500"
+    value: "1000"
+  - name: CARESIGNAL_PINCODE_LIMIT
+    value: "25000"

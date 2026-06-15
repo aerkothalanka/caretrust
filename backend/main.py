@@ -67,11 +67,31 @@ def procedures() -> list[dict[str, object]]:
 @app.get("/api/facilities/top")
 def top_facilities(
     procedure: str = Query("eye_care"),
+    country: str | None = Query(None),
     state: str | None = Query(None),
-    limit: int = Query(10, ge=1, le=50),
+    city: str | None = Query(None),
+    pincode: str | None = Query(None),
+    age_group: str | None = Query(None),
+    limit: int = Query(10, ge=1, le=200),
 ):
     _validate_procedure(procedure)
-    return ranked_facilities(store, procedure, state, limit)
+    # Age group is accepted for the planner workflow; current source data has no patient-age dimension.
+    return ranked_facilities(store, procedure, state, limit, country=country, city=city, pincode=pincode)
+
+
+@app.get("/api/filters")
+def filters() -> dict[str, object]:
+    return store.filter_options()
+
+
+@app.get("/api/service-groupings")
+def service_groupings() -> list[dict[str, str]]:
+    return store.service_groupings()
+
+
+@app.get("/api/location-dimensions")
+def location_dimensions() -> list[dict[str, object]]:
+    return store.location_dimensions()
 
 
 @app.get("/api/facilities/{unique_id}/trust-card", response_model=TrustCard)

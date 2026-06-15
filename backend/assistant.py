@@ -106,11 +106,28 @@ def _verified_comparison(store: DataStore, procedure: str) -> AssistantResponse:
     )
 
 
-def ranked_facilities(store: DataStore, procedure: str, state: str | None, limit: int) -> list[FacilityTopItem]:
+def ranked_facilities(
+    store: DataStore,
+    procedure: str,
+    state: str | None,
+    limit: int,
+    country: str | None = None,
+    city: str | None = None,
+    pincode: str | None = None,
+) -> list[FacilityTopItem]:
+    normalized_country = country.lower() if country else None
     normalized_state = state.lower() if state else None
+    normalized_city = city.lower() if city else None
+    normalized_pincode = str(pincode).lower() if pincode else None
     items: list[FacilityTopItem] = []
     for facility in store.list_facilities():
+        if normalized_country and (facility.country or "").lower() != normalized_country:
+            continue
         if normalized_state and (facility.state or "").lower() != normalized_state:
+            continue
+        if normalized_city and (facility.city or "").lower() != normalized_city:
+            continue
+        if normalized_pincode and (facility.pincode or "").lower() != normalized_pincode:
             continue
         score = score_facility(facility, procedure)
         items.append(

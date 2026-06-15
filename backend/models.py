@@ -19,10 +19,13 @@ class Procedure(BaseModel):
 class Facility(BaseModel):
     unique_id: str
     name: str
+    country: str | None = "India"
     state: str | None = None
     district: str | None = None
     city: str | None = None
     pincode: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     address: str | None = None
     phone: str | None = None
     website: str | None = None
