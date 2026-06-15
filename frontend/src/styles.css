@@ -14,3 +14,6 @@ body{background:linear-gradient(135deg,#f9f7f4 0%,#fff4f0 100%)}
 .trustPills span,.chipGroup i{background:#fff1ed;border-color:#ffc4b8;color:#b7281a}.trustSheet .why b{color:#1b3139}.trustSheet .sources a{color:#b7281a}
 .badge.hi{background:#fff1ed;color:#b7281a}.pin.active{background:#ff3621}.bars i{background:linear-gradient(90deg,#ff3621,#ff9b72)}
 .mapOverlay{background:linear-gradient(135deg,rgba(255,241,237,.92),rgba(249,247,244,.94))}.mapCanvas{background:radial-gradient(circle at 52% 50%,#fff1ed 0 32%,transparent 33%),linear-gradient(135deg,#fff7ed,#f9f7f4)}
+
+/* Black accents for top filters and KPI strip */
+.filterCard span,.kpiCard small{color:#000!important}.kpiCard:before{background:#000!important}.kpiCard{border-color:#d1d5db;box-shadow:0 14px 34px rgba(0,0,0,.08)}
