@@ -133,3 +133,6 @@ class VoiceResponse(BaseModel):
     audio_url: str | None = None
     intent: str
     logged: bool
+    provider: str = "deterministic"
+    realtime_model: str | None = None
+    realtime_error: str | None = None

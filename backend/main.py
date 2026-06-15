@@ -22,7 +22,7 @@ from .models import (
     VoiceResponse,
 )
 from .scoring import PROCEDURES, score_facility
-from .voice import SAMPLE_TTS_PATH, build_voice_response
+from .voice import SAMPLE_TTS_PATH, build_voice_response, gemini_realtime_status, gemini_sample_audio_path
 
 
 app = FastAPI(title="CareSignal API", version="0.1.0")
@@ -145,9 +145,18 @@ def assistant_query(request: AssistantQuery) -> AssistantResponse:
 
 @app.get("/api/voice/sample")
 def voice_sample():
+    audio_path = gemini_sample_audio_path()
+    if audio_path and audio_path.exists():
+        media_type = "audio/wav" if audio_path.suffix.lower() == ".wav" else "audio/ogg"
+        return FileResponse(str(audio_path), media_type=media_type, filename=audio_path.name)
     if SAMPLE_TTS_PATH.exists():
         return FileResponse(str(SAMPLE_TTS_PATH), media_type="audio/ogg", filename=SAMPLE_TTS_PATH.name)
     return {"available": False, "message": "Sample TTS file was not found on this machine."}
+
+
+@app.get("/api/voice/realtime/status")
+def voice_realtime_status() -> dict[str, object]:
+    return gemini_realtime_status()
 
 
 @app.post("/api/voice/respond", response_model=VoiceResponse)
