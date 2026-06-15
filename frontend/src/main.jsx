@@ -150,7 +150,7 @@ function Metrics({ facilities, selected, radius }) {
 }
 function FacilityTable({ facilities, selected, setSelected, onOpenTrust }) {
   const choose = (f) => { setSelected(f); onOpenTrust(f); };
-  return <section className="card rankings"><div className="cardTitle"><h2>Ranked facilities</h2><span>Click View for specialties, procedures, evidence, and score details</span></div><table className="rank"><thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Score</th><th>Status</th><th>Trust</th></tr></thead><tbody>{facilities.map((f, i) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => choose(f)}><td>#{i + 1}</td><td><b>{f.name}</b><small>Specialties and procedures are inside the Trust Card.</small></td><td>{[f.city, f.state, f.pincode].filter(Boolean).join(', ')}</td><td><b>{fmt(f.score)}</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{displayConfidence(f)}</span></td><td><button className="trustOpenBtn" onClick={(e) => { e.stopPropagation(); choose(f); }}>View</button></td></tr>)}</tbody></table>{!facilities.length && <p className="empty">No facilities match these filters. Try All states or a wider service.</p>}</section>;
+  return <section className="card rankings"><div className="cardTitle"><h2>Ranked facilities</h2><span>Click View for specialties, procedures, evidence, and score details</span></div><table className="rank"><thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Score</th><th>Status</th><th>Trust</th></tr></thead><tbody>{facilities.map((f, i) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => choose(f)}><td>{i + 1}</td><td><b>{f.name}</b></td><td>{[f.city, f.state, f.pincode].filter(Boolean).join(', ')}</td><td><b>{fmt(f.score)}</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{displayConfidence(f)}</span></td><td><button className="trustOpenBtn" onClick={(e) => { e.stopPropagation(); choose(f); }}>View</button></td></tr>)}</tbody></table>{!facilities.length && <p className="empty">No facilities match these filters. Try All states or a wider service.</p>}</section>;
 }
 function TrustCard({ facility, serviceLabel, onClose }) {
   if (!facility) return null;
@@ -217,7 +217,7 @@ function GoogleMapView({ apiKey, facilities, visible, selected, setSelected, cen
         });
         marker.addListener('click', () => setSelected(f));
       });
-      new maps.Circle({ map, center: centerLatLng, radius: Number(radius) * 1000, strokeColor: '#0b6b57', strokeOpacity: .72, strokeWeight: 2, fillColor: '#0f9f75', fillOpacity: .12 });
+      new maps.Circle({ map, center: centerLatLng, radius: Number(radius) * 1000, strokeColor: '#ff3621', strokeOpacity: .72, strokeWeight: 2, fillColor: '#ff7a45', fillOpacity: .12 });
       if (!bounds.isEmpty()) map.fitBounds(bounds, 56);
       setMapState('ready');
     }).catch(() => setMapState('embed'));
