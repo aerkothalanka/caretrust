@@ -72,7 +72,7 @@ function projectPoint(f) {
 function AppHeader({ activeTab, setActiveTab, onPlayVoice }) {
   return <header className="topbar">
     <div className="brandNav">
-      <div className="brandBlock"><div className="brand">Care<span>Signal</span></div><div className="brandSub">Facility Help Desk</div></div>
+      <div className="brandBlock"><div className="brand">Care<span>Signal</span></div><div className="brandSub">Facility Trust Desk</div></div>
       <nav className="tabs" aria-label="Main sections">{TABS.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav>
     </div>
     <div className="callTop"><b>Digital call assistant</b><a href="tel:+141****0126">Call CareSignal</a><button onClick={onPlayVoice}>Play voice</button></div>
@@ -81,22 +81,22 @@ function AppHeader({ activeTab, setActiveTab, onPlayVoice }) {
 function FilterBar({ filters, values, setters, services }) {
   const opts = (items, allLabel) => [{ value: '', label: allLabel }, ...(items || [])];
   return <section className="filterCard">
-    <label><span>1. Country</span><select value={values.country} onChange={(e) => setters.setCountry(e.target.value)}>{opts(filters.countries, 'All countries').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
-    <label><span>2. State / region</span><select value={values.state} onChange={(e) => setters.setState(e.target.value)}>{opts(filters.states, 'All states').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
-    <label><span>3. City</span><select value={values.city} onChange={(e) => setters.setCity(e.target.value)}>{opts(filters.cities, 'All cities').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
-    <label><span>4. Postal code</span><select value={values.pincode} onChange={(e) => setters.setPincode(e.target.value)}>{opts(filters.pincodes, 'All postal codes').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
-    <label><span>5. Service</span><select value={values.service} onChange={(e) => setters.setService(e.target.value)}>{services.map((s) => <option key={s.service_id} value={s.service_id}>{s.service_label}</option>)}</select></label>
-    <label><span>6. Age group</span><select value={values.ageGroup} onChange={(e) => setters.setAgeGroup(e.target.value)}>{(filters.age_groups || AGE_FALLBACK).map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}</select></label>
+    <label><span>Country</span><select value={values.country} onChange={(e) => setters.setCountry(e.target.value)}>{opts(filters.countries, 'All countries').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
+    <label><span>State / region</span><select value={values.state} onChange={(e) => setters.setState(e.target.value)}>{opts(filters.states, 'All states').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
+    <label><span>City</span><select value={values.city} onChange={(e) => setters.setCity(e.target.value)}>{opts(filters.cities, 'All cities').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
+    <label><span>Postal code</span><select value={values.pincode} onChange={(e) => setters.setPincode(e.target.value)}>{opts(filters.pincodes, 'All postal codes').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
+    <label><span>Service</span><select value={values.service} onChange={(e) => setters.setService(e.target.value)}>{services.map((s) => <option key={s.service_id} value={s.service_id}>{s.service_label}</option>)}</select></label>
+    <label><span>Age group</span><select value={values.ageGroup} onChange={(e) => setters.setAgeGroup(e.target.value)}>{(filters.age_groups || AGE_FALLBACK).map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}</select></label>
   </section>;
 }
 function Metrics({ facilities, selected, radius }) {
   const verified = facilities.filter((f) => displayConfidence(f) === 'Human verified').length;
-  return <div className="metricrow">
-    <div className="metric"><strong>{facilities.length}</strong><small>visible facilities</small></div>
-    <div className="metric"><strong>{fmt(facilities[0]?.score)}</strong><small>top score / 10</small></div>
-    <div className="metric"><strong>{verified}</strong><small>human verified</small></div>
-    <div className="metric"><strong>{radius} km</strong><small>map radius</small></div>
-    <div className="metric wide"><strong>{selected?.name || 'None'}</strong><small>radius center</small></div>
+  return <div className="metricrow kpiRow" aria-label="CareSignal KPI cards">
+    <div className="metric kpiCard"><small>Visible facilities</small><strong>{facilities.length}</strong></div>
+    <div className="metric kpiCard"><small>Top score / 10</small><strong>{fmt(facilities[0]?.score)}</strong></div>
+    <div className="metric kpiCard"><small>Human verified</small><strong>{verified}</strong></div>
+    <div className="metric kpiCard"><small>Map radius</small><strong>{radius} km</strong></div>
+    <div className="metric kpiCard wide"><small>Radius center</small><strong>{selected?.name || 'None'}</strong></div>
   </div>;
 }
 function FacilityTable({ facilities, selected, setSelected }) {
@@ -116,7 +116,7 @@ function googleMapZoom(radius) {
 function googleEmbedSrc(center, radius) {
   const lat = Number(center?.latitude), lng = Number(center?.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '';
-  return `https://www.google.com/maps?q=${encodeURIComponent(`${lat},${lng}`)}&z=${googleMapZoom(radius)}&output=embed`;
+  return `https://maps.google.com/maps?ll=${encodeURIComponent(`${lat},${lng}`)}&q=${encodeURIComponent(`${lat},${lng}`)}&z=${googleMapZoom(radius)}&t=m&output=embed`;
 }
 function loadGoogleMaps(apiKey) {
   if (!apiKey) return Promise.reject(new Error('missing Google Maps API key'));
