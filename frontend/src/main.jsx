@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
@@ -109,11 +109,75 @@ function TrustCard({ facility, serviceLabel }) {
   const sources = facility.source_urls || [facility.source_url, facility.website].filter(Boolean);
   return <aside className="card trust"><div className="trustHeader"><div><h2>Trust Card</h2><small>{facility.name}</small></div><div className="score">{fmt(facility.score)}</div></div><p><b>Claim:</b> Supports {serviceLabel}.</p><div className="evidence">{(facility.evidence_snippets || []).slice(0, 2).join(' ') || facility.evidence_summary || facility.description || 'Evidence appears in extracted facility text.'}</div><div className="why">{entries.slice(0, 8).map(([k, v, m]) => <div key={k}><b>{Number(v || 0).toFixed(2)}{m ? `/${m}` : ''}</b><span>{k}</span></div>)}</div><div className="sources"><b>Sources</b>{sources.slice(0, 3).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>)}</div><p className="footer"><b>Uncertainty:</b> {(facility.uncertainty_flags || ['Treat extracted claims as claims to verify, not ground truth.']).join('; ')}</p></aside>;
 }
-function RadiusMap({ facilities, selected, setSelected, radius, setRadius }) {
+
+function googleMapZoom(radius) {
+  return radius <= 50 ? 10 : radius <= 150 ? 8 : radius <= 350 ? 7 : 6;
+}
+function googleEmbedSrc(center, radius) {
+  const lat = Number(center?.latitude), lng = Number(center?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '';
+  return `https://www.google.com/maps?q=${encodeURIComponent(`${lat},${lng}`)}&z=${googleMapZoom(radius)}&output=embed`;
+}
+function loadGoogleMaps(apiKey) {
+  if (!apiKey) return Promise.reject(new Error('missing Google Maps API key'));
+  if (window.google?.maps) return Promise.resolve(window.google.maps);
+  if (window.__careSignalGoogleMapsPromise) return window.__careSignalGoogleMapsPromise;
+  window.__careSignalGoogleMapsPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => window.google?.maps ? resolve(window.google.maps) : reject(new Error('Google Maps failed to initialize'));
+    script.onerror = () => reject(new Error('Google Maps script failed to load'));
+    document.head.appendChild(script);
+  });
+  return window.__careSignalGoogleMapsPromise;
+}
+function GoogleMapView({ apiKey, facilities, visible, selected, setSelected, center, radius }) {
+  const mapRef = useRef(null);
+  const [mapState, setMapState] = useState(apiKey ? 'loading' : 'embed');
+  const embedSrc = googleEmbedSrc(center, radius);
+  useEffect(() => {
+    let cancelled = false;
+    if (!center?.latitude || !center?.longitude) { setMapState('no-center'); return; }
+    if (!apiKey || !apiKey.startsWith('AIza')) { setMapState('embed'); return; }
+    loadGoogleMaps(apiKey).then((maps) => {
+      if (cancelled || !mapRef.current) return;
+      const centerLatLng = { lat: Number(center.latitude), lng: Number(center.longitude) };
+      const map = new maps.Map(mapRef.current, {
+        center: centerLatLng,
+        zoom: googleMapZoom(radius),
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true,
+      });
+      const bounds = new maps.LatLngBounds();
+      visible.forEach((f) => {
+        if (!Number.isFinite(Number(f.latitude)) || !Number.isFinite(Number(f.longitude))) return;
+        const pos = { lat: Number(f.latitude), lng: Number(f.longitude) };
+        bounds.extend(pos);
+        const marker = new maps.Marker({
+          position: pos,
+          map,
+          title: `${f.name} • ${fmt(f.score)}/10`,
+          label: selected?.unique_id === f.unique_id ? '★' : undefined,
+        });
+        marker.addListener('click', () => setSelected(f));
+      });
+      new maps.Circle({ map, center: centerLatLng, radius: Number(radius) * 1000, strokeColor: '#0b6b57', strokeOpacity: .72, strokeWeight: 2, fillColor: '#0f9f75', fillOpacity: .12 });
+      if (!bounds.isEmpty()) map.fitBounds(bounds, 56);
+      setMapState('ready');
+    }).catch(() => setMapState('embed'));
+    return () => { cancelled = true; };
+  }, [apiKey, center?.unique_id, center?.latitude, center?.longitude, radius, visible.map((f) => f.unique_id).join('|'), selected?.unique_id]);
+  if (!embedSrc) return <div className="googleMapWrap"><div className="mapOverlay"><b>Google Maps unavailable</b><span>Select a facility with latitude/longitude to load the map.</span></div></div>;
+  return <div className="googleMapWrap"><div ref={mapRef} className="googleMap" />{mapState !== 'ready' && <iframe title={`Google map for ${center?.name || 'selected facility'}`} className="googleMapFrame" src={embedSrc} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />}</div>;
+}
+
+function RadiusMap({ facilities, selected, setSelected, radius, setRadius, googleMapsApiKey }) {
   const center = selected || facilities[0];
   const visible = facilities.filter((f) => { const d = distanceKm(center, f); return d === null || d <= radius || f.unique_id === center?.unique_id; });
-  const c = projectPoint(center || {});
-  return <section className="card mapCard"><div className="cardTitle"><h2>Interactive map radius</h2><span>{visible.length} facilities inside radius</span></div><div className="radiusControl"><label>Radius: <b>{radius} km</b><input type="range" min="25" max="750" step="25" value={radius} onChange={(e) => setRadius(Number(e.target.value))} /></label></div><div className="mapCanvas"><div className="indiaLabel">India facility view</div><div className="radiusCircle" style={{ left: `${c.left}%`, top: `${c.top}%`, width: `${Math.min(78, radius / 8)}%`, height: `${Math.min(78, radius / 8)}%` }} />{visible.map((f) => { const p = projectPoint(f); return <button key={f.unique_id} className={`pin ${selected?.unique_id === f.unique_id ? 'active' : ''}`} style={{ left: `${p.left}%`, top: `${p.top}%` }} onClick={() => setSelected(f)} title={`${f.name} • ${fmt(f.score)}`}>{selected?.unique_id === f.unique_id ? '★' : '•'}</button>; })}</div><div className="mapList">{visible.slice(0, 8).map((f) => <button key={f.unique_id} onClick={() => setSelected(f)}><b>{f.name}</b><span>{distanceKm(center, f)?.toFixed(0) || 0} km • {f.city || f.state}</span></button>)}</div></section>;
+  return <section className="card mapCard"><div className="cardTitle"><h2>Google Maps radius</h2><span>{visible.length} facilities inside radius</span></div><div className="radiusControl"><label>Radius: <b>{radius} km</b><input type="range" min="25" max="750" step="25" value={radius} onChange={(e) => setRadius(Number(e.target.value))} /></label></div><GoogleMapView apiKey={googleMapsApiKey} facilities={facilities} visible={visible} selected={selected} setSelected={setSelected} center={center} radius={radius} /><div className="mapList">{visible.slice(0, 8).map((f) => <button key={f.unique_id} onClick={() => setSelected(f)}><b>{f.name}</b><span>{distanceKm(center, f)?.toFixed(0) || 0} km • {f.city || f.state}</span></button>)}</div></section>;
 }
 function VerificationForm({ facility, service, serviceLabel, onVerified }) {
   const [status, setStatus] = useState('verified'); const [notes, setNotes] = useState('Verified by phone or visit.');
@@ -133,15 +197,15 @@ function App() {
   const [activeTab, setActiveTab] = useState('explorer');
   const [filters, setFilters] = useState({ countries: [{ value: 'India', label: 'India' }], states: [], cities: [], pincodes: [], services: SERVICE_FALLBACK, age_groups: AGE_FALLBACK });
   const [country, setCountry] = useState('India'), [state, setState] = useState(''), [city, setCity] = useState(''), [pincode, setPincode] = useState(''), [service, setService] = useState('cardiac_surgery'), [ageGroup, setAgeGroup] = useState('all');
-  const [facilities, setFacilities] = useState(fallbackFacilities); const [selected, setSelected] = useState(fallbackFacilities[0]); const [radius, setRadius] = useState(250); const [shortlists, setShortlists] = useState([]);
+  const [facilities, setFacilities] = useState(fallbackFacilities); const [selected, setSelected] = useState(fallbackFacilities[0]); const [radius, setRadius] = useState(250); const [shortlists, setShortlists] = useState([]); const [config, setConfig] = useState({ google_maps_api_key: '' });
   const services = filters.services?.length ? filters.services : SERVICE_FALLBACK;
   const serviceDef = services.find((s) => s.service_id === service) || services[0]; const serviceLabel = serviceDef?.service_label || 'Selected service';
-  useEffect(() => { api('/api/filters').then((data) => { setFilters((old) => ({ ...old, ...data })); }).catch(() => {}); }, []);
+  useEffect(() => { api('/api/filters').then((data) => { setFilters((old) => ({ ...old, ...data })); }).catch(() => {}); api('/api/config').then(setConfig).catch(() => {}); }, []);
   useEffect(() => { let mounted = true; const params = new URLSearchParams({ procedure: service, limit: '100' }); if (country) params.set('country', country); if (state) params.set('state', state); if (city) params.set('city', city); if (pincode) params.set('pincode', pincode); if (ageGroup) params.set('age_group', ageGroup); api(`/api/facilities/top?${params}`).then((data) => { const rows = (Array.isArray(data) ? data : data.facilities || data.data || []).map(normalizeFacility); if (mounted) { setFacilities(rows); setSelected(rows[0] || null); } }).catch(() => { const rows = fallbackFacilities.map(normalizeFacility).filter((f) => (!country || f.country === country) && (!state || f.state === state) && (!city || f.city === city) && (!pincode || f.pincode === pincode)); if (mounted) { setFacilities(rows); setSelected(rows[0] || null); } }); return () => { mounted = false; }; }, [country, state, city, pincode, service, ageGroup]);
   const playVoice = async () => { const audio = new Audio('/api/voice/sample'); try { await audio.play(); } catch { window.open('/api/voice/sample', '_blank'); } };
   const onVerified = (status) => { if (!selected) return; const delta = status === 'verified' ? 1.5 : status === 'rejected' ? -2 : 0.5; const updated = { ...selected, human_verification_status: status, human_verified: status === 'verified', score: Math.max(0, Math.min(10, Number(selected.score || 0) + delta)) }; setSelected(updated); setFacilities((rows) => rows.map((f) => f.unique_id === updated.unique_id ? updated : f).sort((a, b) => b.score - a.score)); };
   const addShortlist = async () => { if (!selected) return; setShortlists((x) => [{ id: `${selected.unique_id}-${Date.now()}`, name: selected.name, meta: `${serviceLabel} • ${selected.city || selected.state || 'India'}` }, ...x]); try { await api('/api/shortlists', { method: 'POST', body: JSON.stringify({ unique_id: selected.unique_id, procedure: service, notes: `${serviceLabel} shortlist` }) }); } catch (_) {} };
-  return <><AppHeader activeTab={activeTab} setActiveTab={setActiveTab} onPlayVoice={playVoice} /><main className="main"><section className="hero filtersOnly"><FilterBar filters={filters} values={{ country, state, city, pincode, service, ageGroup }} setters={{ setCountry, setState, setCity, setPincode, setService, setAgeGroup }} services={services} /></section><Metrics facilities={facilities} selected={selected} radius={radius} />{activeTab === 'explorer' && <div className="grid"><FacilityTable facilities={facilities} selected={selected} setSelected={setSelected} /><TrustCard facility={selected} serviceLabel={serviceLabel} /></div>}{activeTab === 'map' && <div className="grid"><RadiusMap facilities={facilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} /><TrustCard facility={selected} serviceLabel={serviceLabel} /></div>}{activeTab === 'trust' && <div className="grid"><TrustCard facility={selected} serviceLabel={serviceLabel} /><ServiceTable services={services} /></div>}{activeTab === 'verification' && <div className="grid"><VerificationForm facility={selected} service={service} serviceLabel={serviceLabel} onVerified={onVerified} /><TrustCard facility={selected} serviceLabel={serviceLabel} /></div>}{activeTab === 'assistant' && <div className="grid"><AssistantPanel service={service} serviceLabel={serviceLabel} selected={selected} /><RadiusMap facilities={facilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} /></div>}{activeTab === 'shortlists' && <div className="grid"><Shortlists selected={selected} shortlists={shortlists} onAdd={addShortlist} /><ServiceTable services={services} /></div>}</main></>;
+  return <><AppHeader activeTab={activeTab} setActiveTab={setActiveTab} onPlayVoice={playVoice} /><main className="main"><section className="hero filtersOnly"><FilterBar filters={filters} values={{ country, state, city, pincode, service, ageGroup }} setters={{ setCountry, setState, setCity, setPincode, setService, setAgeGroup }} services={services} /></section><Metrics facilities={facilities} selected={selected} radius={radius} />{activeTab === 'explorer' && <div className="grid"><FacilityTable facilities={facilities} selected={selected} setSelected={setSelected} /><TrustCard facility={selected} serviceLabel={serviceLabel} /></div>}{activeTab === 'map' && <div className="grid"><RadiusMap facilities={facilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} googleMapsApiKey={config.google_maps_api_key} /><TrustCard facility={selected} serviceLabel={serviceLabel} /></div>}{activeTab === 'trust' && <div className="grid"><TrustCard facility={selected} serviceLabel={serviceLabel} /><ServiceTable services={services} /></div>}{activeTab === 'verification' && <div className="grid"><VerificationForm facility={selected} service={service} serviceLabel={serviceLabel} onVerified={onVerified} /><TrustCard facility={selected} serviceLabel={serviceLabel} /></div>}{activeTab === 'assistant' && <div className="grid"><AssistantPanel service={service} serviceLabel={serviceLabel} selected={selected} /><RadiusMap facilities={facilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} googleMapsApiKey={config.google_maps_api_key} /></div>}{activeTab === 'shortlists' && <div className="grid"><Shortlists selected={selected} shortlists={shortlists} onAdd={addShortlist} /><ServiceTable services={services} /></div>}</main></>;
 }
 
 createRoot(document.getElementById('root')).render(<App />);
