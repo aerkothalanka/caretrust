@@ -1,0 +1,477 @@
+from __future__ import annotations
+
+import os
+import re
+import uuid
+import json
+import time
+from datetime import datetime, timezone
+from typing import Any
+from urllib import request as urllib_request
+from urllib.error import URLError
+
+from .models import Facility, ShortlistRequest, VerificationRequest, VoiceRequest
+from .scoring import PROCEDURES
+
+
+FACILITIES_TABLE = "databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.facilities"
+PINCODE_TABLE = "databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.india_post_pincode_directory"
+NFHS_TABLE = "databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.nfhs_5_district_health_indicators"
+APP_SCHEMA = "lakebase_hackathon_demo.public"
+
+
+class DataStore:
+    def __init__(self) -> None:
+        self._facilities: list[Facility] | None = None
+        self._verifications: list[dict[str, Any]] = []
+        self._shortlists: list[dict[str, Any]] = []
+        self._voice_sessions: dict[str, dict[str, Any]] = {}
+        self._voice_turns: list[dict[str, Any]] = []
+        self.last_source = "not_loaded"
+
+    def list_procedures(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": procedure_id,
+                "label": str(definition["label"]),
+                "description": str(definition["description"]),
+                "synonyms": list(definition["terms"]),
+            }
+            for procedure_id, definition in PROCEDURES.items()
+        ]
+
+    def list_facilities(self) -> list[Facility]:
+        if self._facilities is None:
+            self._facilities = self._load_facilities()
+        return [self._apply_verification_state(facility) for facility in self._facilities]
+
+    def get_facility(self, unique_id: str) -> Facility | None:
+        for facility in self.list_facilities():
+            if facility.unique_id == unique_id:
+                return facility
+        return None
+
+    def add_verification(self, request: VerificationRequest) -> dict[str, Any]:
+        record = {
+            "verification_id": str(uuid.uuid4()),
+            "unique_id": request.unique_id,
+            "procedure": request.procedure,
+            "status": request.status,
+            "verifier_name": request.verifier_name,
+            "notes": request.notes,
+            "evidence_url": request.evidence_url,
+            "created_at": _now_iso(),
+        }
+        self._verifications.append(record)
+        self._insert_lakebase(
+            "facility_human_verifications",
+            {
+                "verification_id": record["verification_id"],
+                "facility_unique_id": record["unique_id"],
+                "procedure": record["procedure"],
+                "verification_status": record["status"],
+                "verifier_name": record["verifier_name"],
+                "notes": record["notes"],
+                "evidence_url": record["evidence_url"],
+                "created_at": record["created_at"],
+            },
+        )
+        return record
+
+    def add_shortlist(self, request: ShortlistRequest) -> dict[str, Any]:
+        record = {
+            "shortlist_id": str(uuid.uuid4()),
+            "facility_unique_id": request.unique_id,
+            "procedure": request.procedure,
+            "planner_name": request.planner_name,
+            "notes": request.notes,
+            "created_at": _now_iso(),
+        }
+        self._shortlists.append(record)
+        self._insert_lakebase("planner_shortlists", record)
+        return record
+
+    def verification_notes(self, unique_id: str, procedure: str) -> list[str]:
+        return [
+            str(record["notes"])
+            for record in self._verifications
+            if record["unique_id"] == unique_id and record["procedure"] == procedure and record.get("notes")
+        ]
+
+    def start_or_get_voice_session(self, session_id: str | None) -> str:
+        active_id = session_id or str(uuid.uuid4())
+        if active_id not in self._voice_sessions:
+            record = {"session_id": active_id, "created_at": _now_iso(), "last_turn_at": _now_iso()}
+            self._voice_sessions[active_id] = record
+            self._insert_lakebase("voice_assistant_sessions", record)
+        return active_id
+
+    def log_voice_turn(self, session_id: str, request: VoiceRequest, response_text: str, intent: str) -> bool:
+        record = {
+            "turn_id": str(uuid.uuid4()),
+            "session_id": session_id,
+            "facility_unique_id": request.unique_id,
+            "procedure": request.procedure,
+            "caller_transcript": request.transcript,
+            "assistant_response": response_text,
+            "intent": intent,
+            "created_at": _now_iso(),
+        }
+        self._voice_turns.append(record)
+        self._insert_lakebase("voice_assistant_turns", record)
+        return True
+
+    def log_call(self, session_id: str, facility_unique_id: str | None, procedure: str | None, summary: str) -> None:
+        self._insert_lakebase(
+            "facility_call_logs",
+            {
+                "call_id": str(uuid.uuid4()),
+                "session_id": session_id,
+                "facility_unique_id": facility_unique_id,
+                "procedure": procedure,
+                "call_summary": summary,
+                "created_at": _now_iso(),
+            },
+        )
+
+    def _load_facilities(self) -> list[Facility]:
+        if _truthy(os.getenv("CARESIGNAL_FORCE_FALLBACK")):
+            self.last_source = "fallback_forced"
+            return fallback_facilities()
+        try:
+            rows = _load_databricks_facility_rows()
+            if rows:
+                self.last_source = "databricks_sql"
+                return [_normalize_facility(row, index) for index, row in enumerate(rows)]
+        except Exception as exc:  # Databricks packages or credentials may not exist locally.
+            self.last_source = f"fallback_after_error:{exc.__class__.__name__}"
+        self.last_source = self.last_source if self.last_source.startswith("fallback_after_error") else "fallback"
+        return fallback_facilities()
+
+    def _apply_verification_state(self, facility: Facility) -> Facility:
+        related = [record for record in self._verifications if record["unique_id"] == facility.unique_id]
+        if not related:
+            return facility
+        latest = sorted(related, key=lambda row: row["created_at"])[-1]
+        return facility.copy(
+            update={
+                "human_verification_status": latest["status"],
+                "human_verification_count": len(related),
+            }
+        )
+
+    def _insert_lakebase(self, table: str, values: dict[str, Any]) -> None:
+        if not all(os.getenv(name) for name in ["PGHOST", "PGDATABASE", "PGUSER", "PGPASSWORD"]):
+            return
+        try:
+            import psycopg2
+        except Exception:
+            return
+        columns = list(values)
+        placeholders = ", ".join(["%s"] * len(columns))
+        column_sql = ", ".join(columns)
+        sql = f"INSERT INTO public.{table} ({column_sql}) VALUES ({placeholders})"
+        try:
+            conn = psycopg2.connect(
+                host=os.getenv("PGHOST"),
+                database=os.getenv("PGDATABASE"),
+                user=os.getenv("PGUSER"),
+                password=os.getenv("PGPASSWORD"),
+                port=os.getenv("PGPORT", "5432"),
+                sslmode=os.getenv("PGSSLMODE", "require"),
+            )
+            with conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(sql, [values[column] for column in columns])
+            conn.close()
+        except Exception:
+            return
+
+
+def _load_databricks_facility_rows() -> list[dict[str, Any]]:
+    warehouse_id = os.getenv("DATABRICKS_WAREHOUSE_ID")
+    if not warehouse_id:
+        return []
+    statement_rows = _load_statement_execution_rows(warehouse_id)
+    if statement_rows:
+        return statement_rows
+    from databricks import sql
+    from databricks.sdk.core import Config
+
+    cfg = Config()
+    limit = int(os.getenv("CARESIGNAL_DATABRICKS_LIMIT", "250"))
+    query = f"SELECT * FROM {FACILITIES_TABLE} LIMIT {limit}"
+    conn = sql.connect(
+        server_hostname=cfg.host,
+        http_path=f"/sql/1.0/warehouses/{warehouse_id}",
+        credentials_provider=lambda: cfg.authenticate,
+    )
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(query)
+            names = [column[0] for column in cursor.description]
+            return [dict(zip(names, row)) for row in cursor.fetchall()]
+    finally:
+        conn.close()
+
+
+def _load_statement_execution_rows(warehouse_id: str) -> list[dict[str, Any]]:
+    host = (os.getenv("DATABRICKS_HOST") or "").rstrip("/")
+    token = os.getenv("DATABRICKS_TOKEN") or os.getenv("DATABRICKS_PAT")
+    if not host or not token:
+        return []
+    if not host.startswith("http"):
+        host = f"https://{host}"
+    limit = int(os.getenv("CARESIGNAL_DATABRICKS_LIMIT", "250"))
+    payload = {
+        "statement": f"SELECT * FROM {FACILITIES_TABLE} LIMIT {limit}",
+        "warehouse_id": warehouse_id,
+        "wait_timeout": "10s",
+        "disposition": "INLINE",
+    }
+    response = _statement_api(host, token, payload)
+    state = response.get("status", {}).get("state")
+    statement_id = response.get("statement_id")
+    attempts = 0
+    while state in {"PENDING", "RUNNING"} and statement_id and attempts < 3:
+        attempts += 1
+        time.sleep(1)
+        response = _statement_api(host, token, None, statement_id)
+        state = response.get("status", {}).get("state")
+    if state != "SUCCEEDED":
+        return []
+    columns = [column["name"] for column in response.get("manifest", {}).get("schema", {}).get("columns", [])]
+    data = response.get("result", {}).get("data_array", [])
+    return [dict(zip(columns, row)) for row in data] if columns else []
+
+
+def _statement_api(host: str, token: str, payload: dict[str, Any] | None, statement_id: str | None = None) -> dict[str, Any]:
+    url = f"{host}/api/2.0/sql/statements" if statement_id is None else f"{host}/api/2.0/sql/statements/{statement_id}"
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    req = urllib_request.Request(
+        url,
+        data=body,
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        method="POST" if payload is not None else "GET",
+    )
+    try:
+        with urllib_request.urlopen(req, timeout=15) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except (OSError, URLError, json.JSONDecodeError):
+        return {}
+
+
+def _normalize_facility(row: dict[str, Any], index: int) -> Facility:
+    lower = {key.lower(): value for key, value in row.items()}
+    text_blob = " ".join(str(value) for value in row.values() if value is not None)
+    unique_id = str(_first(lower, "unique_id", "id", "facility_id", "uuid") or f"dbx-{index}")
+    name = str(_first(lower, "name", "facility_name", "hospital_name", "organisation_name") or f"Facility {index + 1}")
+    website = _first(lower, "website", "url", "web_url", "facility_url")
+    source_url = _first(lower, "source_url", "source", "reference_url", "data_source_url") or website
+    specialty_text = str(_first(lower, "specialties", "speciality", "services", "departments") or text_blob)
+    return Facility(
+        unique_id=unique_id,
+        name=name,
+        state=_string_or_none(_first(lower, "state", "state_name")),
+        district=_string_or_none(_first(lower, "district", "district_name")),
+        city=_string_or_none(_first(lower, "city", "town", "village")),
+        pincode=_string_or_none(_first(lower, "pincode", "pin_code", "postal_code")),
+        address=_string_or_none(_first(lower, "address", "street_address", "location")),
+        phone=_string_or_none(_first(lower, "phone", "telephone", "mobile", "contact")),
+        website=_string_or_none(website),
+        source_url=_string_or_none(source_url),
+        specialties=_split_values(specialty_text),
+        procedures=_infer_terms(text_blob, "terms"),
+        equipment=_infer_terms(text_blob, "equipment"),
+        capabilities=_infer_terms(text_blob, "capabilities"),
+        description=_string_or_none(_first(lower, "description", "about", "remarks")) or text_blob[:500],
+        last_updated=_string_or_none(_first(lower, "last_updated", "updated_at", "modified_at")),
+        source_row=row,
+    )
+
+
+def fallback_facilities() -> list[Facility]:
+    return [
+        Facility(
+            unique_id="fallback-aravind-madurai",
+            name="Aravind Eye Hospital, Madurai",
+            state="Tamil Nadu",
+            district="Madurai",
+            city="Madurai",
+            pincode="625020",
+            address="Anna Nagar, Madurai",
+            phone="+91-452-4356100",
+            website="https://aravind.org",
+            source_url="https://aravind.org/hospitals/madurai/",
+            specialties=["Ophthalmology", "Retina", "Cataract", "Glaucoma"],
+            procedures=["Eye care", "Cataract surgery", "Retina services"],
+            equipment=["Ophthalmic laser", "Retinal imaging", "OCT"],
+            capabilities=["Cataract", "Retina", "Glaucoma", "Vision screening"],
+            description="Large ophthalmology hospital with cataract, retina, glaucoma, pediatric eye care, and outreach services.",
+            last_updated="2026-03-20",
+        ),
+        Facility(
+            unique_id="fallback-narayana-bengaluru",
+            name="Narayana Institute of Cardiac Sciences",
+            state="Karnataka",
+            district="Bengaluru Urban",
+            city="Bengaluru",
+            pincode="560099",
+            address="Bommasandra, Bengaluru",
+            phone="+91-80-71222222",
+            website="https://www.narayanahealth.org",
+            source_url="https://www.narayanahealth.org/hospitals/bangalore/narayana-institute-cardiac-sciences-bommasandra",
+            specialties=["Cardiology", "Cardiac surgery", "Critical care"],
+            procedures=["CABG", "Cardiac surgery", "Angioplasty"],
+            equipment=["Cath lab", "Cardiac ICU", "Ventilator"],
+            capabilities=["Bypass", "Cardiac surgery", "Critical care"],
+            description="Cardiac sciences center with cardiac surgery, coronary intervention, cath lab services, and cardiac critical care.",
+            last_updated="2026-02-14",
+        ),
+        Facility(
+            unique_id="fallback-fortis-delhi",
+            name="Fortis Escorts Heart Institute",
+            state="Delhi",
+            district="South East Delhi",
+            city="New Delhi",
+            pincode="110025",
+            address="Okhla Road, New Delhi",
+            phone="+91-11-47135000",
+            website="https://www.fortishealthcare.com",
+            source_url="https://www.fortishealthcare.com/location/fortis-escorts-heart-institute-okhla-road",
+            specialties=["Cardiology", "CTVS", "Emergency", "Critical care"],
+            procedures=["Cardiac surgery", "Emergency care"],
+            equipment=["Cath lab", "CTVS operating theatre", "ICU", "Ambulance"],
+            capabilities=["Cardiac surgery", "Emergency stabilization", "Critical care"],
+            description="Heart institute with cardiac surgery, interventional cardiology, critical care, and emergency support.",
+            last_updated="2025-12-01",
+        ),
+        Facility(
+            unique_id="fallback-apollo-chennai",
+            name="Apollo Hospitals, Greams Road",
+            state="Tamil Nadu",
+            district="Chennai",
+            city="Chennai",
+            pincode="600006",
+            address="Greams Road, Chennai",
+            phone="+91-44-28290200",
+            website="https://www.apollohospitals.com",
+            source_url="https://www.apollohospitals.com/chennai/",
+            specialties=["Oncology", "Emergency", "ICU", "Maternity", "Dialysis"],
+            procedures=["Oncology", "Emergency care", "Dialysis", "Maternity"],
+            equipment=["Linear accelerator", "Dialysis unit", "ICU ventilator", "Ultrasound"],
+            capabilities=["Chemotherapy", "Radiation oncology", "Emergency", "Dialysis", "Delivery"],
+            description="Multispecialty hospital with oncology, dialysis, emergency, ICU, and maternity services.",
+            last_updated="2026-01-10",
+        ),
+        Facility(
+            unique_id="fallback-kokilaben-mumbai",
+            name="Kokilaben Dhirubhai Ambani Hospital",
+            state="Maharashtra",
+            district="Mumbai Suburban",
+            city="Mumbai",
+            pincode="400053",
+            address="Andheri West, Mumbai",
+            phone="+91-22-42699999",
+            website="https://www.kokilabenhospital.com",
+            source_url="https://www.kokilabenhospital.com/departments/centresofexcellence/centrefor_cancer.html",
+            specialties=["Oncology", "Critical care", "Emergency", "Nephrology"],
+            procedures=["Cancer care", "ICU", "Dialysis"],
+            equipment=["Radiotherapy", "PET CT", "Dialysis machines", "Ventilator"],
+            capabilities=["Chemotherapy", "Radiation oncology", "ICU", "Renal care"],
+            description="Tertiary facility with cancer care, critical care, emergency support, nephrology, and dialysis services.",
+            last_updated="2025-11-05",
+        ),
+        Facility(
+            unique_id="fallback-cloudnine-bengaluru",
+            name="Cloudnine Hospital, Jayanagar",
+            state="Karnataka",
+            district="Bengaluru Urban",
+            city="Bengaluru",
+            pincode="560011",
+            address="Jayanagar, Bengaluru",
+            phone="+91-80-67999999",
+            website="https://www.cloudninecare.com",
+            source_url="https://www.cloudninecare.com/hospital-locations/bangalore/jayanagar",
+            specialties=["Maternity", "Obstetrics", "Gynecology", "Neonatal care"],
+            procedures=["Delivery", "Maternity", "Gynecology"],
+            equipment=["Labor room", "NICU", "Ultrasound", "Fetal monitor"],
+            capabilities=["Delivery", "Obstetrics", "Newborn care", "Gynecology"],
+            description="Women and child hospital with maternity, obstetrics, gynecology, neonatal support, and delivery services.",
+            last_updated="2026-04-01",
+        ),
+        Facility(
+            unique_id="fallback-aiims-delhi",
+            name="AIIMS New Delhi",
+            state="Delhi",
+            district="New Delhi",
+            city="New Delhi",
+            pincode="110029",
+            address="Ansari Nagar, New Delhi",
+            phone="+91-11-26588500",
+            website="https://www.aiims.edu",
+            source_url="https://www.aiims.edu",
+            specialties=["Emergency", "Trauma", "ICU", "Oncology", "Cardiology", "Ophthalmology"],
+            procedures=["Emergency care", "Trauma care", "ICU", "Oncology", "Eye care"],
+            equipment=["Trauma center", "Ventilator", "ICU monitor", "Ambulance"],
+            capabilities=["Emergency", "Trauma care", "Critical care", "Oncology", "Ophthalmology"],
+            description="Public tertiary referral center with emergency, trauma, ICU, oncology, cardiology, and ophthalmology services.",
+            last_updated="2025-10-12",
+        ),
+        Facility(
+            unique_id="fallback-renal-hyderabad",
+            name="Deccan Renal Care Centre",
+            state="Telangana",
+            district="Hyderabad",
+            city="Hyderabad",
+            pincode="500034",
+            address="Banjara Hills, Hyderabad",
+            phone="+91-40-44556677",
+            website=None,
+            source_url="https://example.org/deccan-renal-care",
+            specialties=["Nephrology", "Dialysis"],
+            procedures=["Dialysis", "Hemodialysis"],
+            equipment=["Dialysis machines", "RO plant", "Dialyzer"],
+            capabilities=["Dialysis", "Renal care", "Hemodialysis"],
+            description="Sample fallback dialysis center with nephrology consultation, hemodialysis, and renal follow-up.",
+            last_updated="2026-05-01",
+        ),
+    ]
+
+
+def _infer_terms(text: str, key: str) -> list[str]:
+    lower = text.lower()
+    values: list[str] = []
+    for definition in PROCEDURES.values():
+        for term in definition.get(key, []):
+            term_text = str(term)
+            if term_text.lower() in lower and term_text not in values:
+                values.append(term_text)
+    return values
+
+
+def _split_values(value: str) -> list[str]:
+    parts = [part.strip() for part in re.split(r"[,;|/]", value) if part.strip()]
+    return parts[:20] if parts else []
+
+
+def _first(row: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        value = row.get(key)
+        if value not in [None, ""]:
+            return value
+    return None
+
+
+def _string_or_none(value: Any) -> str | None:
+    if value in [None, ""]:
+        return None
+    return str(value)
+
+
+def _truthy(value: str | None) -> bool:
+    return str(value or "").lower() in {"1", "true", "yes", "on"}
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()

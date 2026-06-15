@@ -1,0 +1,14 @@
+command:
+  - "python"
+  - "-m"
+  - "backend.main"
+
+env:
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: DB_CONNECTION_STRING
+    valueFrom: database
+  - name: USE_MOCK_BACKEND
+    value: "false"
+  - name: CARESIGNAL_FALLBACK_ON_ERROR
+    value: "true"
