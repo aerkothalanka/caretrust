@@ -5,10 +5,8 @@ command:
 
 env:
   - name: DATABRICKS_WAREHOUSE_ID
-    valueFrom: sql-warehouse
-  - name: DB_CONNECTION_STRING
-    valueFrom: database
-  - name: USE_MOCK_BACKEND
-    value: "false"
+    value: "01d40772d8293b41"
   - name: CARESIGNAL_FALLBACK_ON_ERROR
     value: "true"
+  - name: CARESIGNAL_DATABRICKS_LIMIT
+    value: "500"
