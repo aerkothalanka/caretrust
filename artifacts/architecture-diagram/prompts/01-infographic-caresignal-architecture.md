@@ -1,23 +1,15 @@
 ---
-type: infographic
-style: clean vector architecture diagram
-palette: warm orange, teal, blue, purple, green on light background
+type: framework infographic
+style: polished enterprise demo slide
+palette: white, deep navy, Databricks orange, healthcare teal, soft blue
 aspect: 16:9
-source: Databricks notebooks + CareSignal app code
+source: Databricks notebooks + CareSignal app code + Claude Code design review
 ---
 
-Create a polished architecture infographic titled "CareTrust / CareSignal Architecture".
-Use a left-to-right five-zone flow:
-1. Raw / Bronze Sources: Virtue Foundation facilities; India Post pincode directory; NFHS-5 district health indicators.
-2. Silver Cleansing: facilities name/address standardization; pincode postal/location normalization.
-3. Gold Enrichment: facility trust scoring, service tags, trust tiers, review flags; postal canonicalization and quality flags.
-4. Persistence & Sync: Unity Catalog gold Delta tables, Lakebase synced tables, derived app tables for service groups/location dimensions/human verification/shortlists/voice logs.
-5. Databricks App: FastAPI backend, deterministic scoring and assistant layer, React frontend tabs, Google Maps radius, trust cards, verification workflow, Gemini/Twilio voice hooks.
+Create a professional hackathon-demo architecture slide titled "CareTrust Architecture".
+Use only three major swim lanes:
+1. Data Layer — raw facility/location/health data, cleansing & enrichment, gold trust layer, Lakebase app tables.
+2. Agent Layer — explainable trust scoring, planner chat assistant, voice/call assistant, human verification feedback.
+3. Application Layer — Databricks App, React experience, trust cards, map + radius, verification + shortlists.
 
-Must include exact table names where readable:
-- FacilityTrustDesk.virtue_gold.facilities
-- FacilityTrustDesk.virtue_gold.india_post_pincode_directory
-- lakebase_hackathon_demo.public.facilities_gold_sync
-- lakebase_hackathon_demo.public.india_post_pincode_directory_gold_sync
-
-Labels must stay legible and factual. Avoid invented metrics. Include the recorded metrics: 7 service groups; 21,162 deduped location rows from 165,627 India Post rows.
+Keep the diagram executive-friendly. Do not include notebook filenames, full table paths, API routes, warehouse IDs, or debug notes. Use concise labels and minimal arrows. Emphasize that data becomes explainable decisions and verified planning workflows.
