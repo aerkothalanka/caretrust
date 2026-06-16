@@ -4,12 +4,12 @@ from collections import defaultdict
 
 from .data import DataStore
 from .models import AssistantQuery, AssistantResponse, FacilityTopItem
-from .scoring import PROCEDURES, score_facility
+from .scoring import infer_procedure, procedure_label, score_facility
 
 
 def answer_query(store: DataStore, query: AssistantQuery) -> AssistantResponse:
     question = query.question.lower()
-    procedure = _procedure_from_query(query.procedure, question)
+    procedure = infer_procedure(query.procedure, question) or "eye_care"
 
     if any(token in question for token in ["compare state", "state comparison", "states", "by state"]):
         return _state_comparison(store, procedure)
@@ -25,7 +25,7 @@ def answer_query(store: DataStore, query: AssistantQuery) -> AssistantResponse:
 def _top_facilities(store: DataStore, procedure: str, state: str | None) -> AssistantResponse:
     items = ranked_facilities(store, procedure, state, 10)
     leaders = ", ".join(f"{item.name} ({item.score:.1f})" for item in items[:3])
-    answer = f"Top {procedure} options are led by {leaders}. Scores are out of 10 and combine procedure evidence, contactability, location completeness, freshness, and human verification."
+    answer = f"Top {procedure_label(procedure)} options are led by {leaders}. Scores are out of 10 and combine procedure evidence, contactability, location completeness, freshness, and human verification."
     return AssistantResponse(
         intent="top_facilities",
         answer=answer,
@@ -45,7 +45,7 @@ def _state_comparison(store: DataStore, procedure: str) -> AssistantResponse:
     strongest = max(data, key=lambda row: row["average_score"]) if data else None
     answer = "No state comparison is available yet."
     if strongest:
-        answer = f"{strongest['state']} has the strongest sample average for {procedure} at {strongest['average_score']}/10 across {strongest['facility_count']} fallback or queried facilities."
+        answer = f"{strongest['state']} has the strongest sample average for {procedure_label(procedure)} at {strongest['average_score']}/10 across {strongest['facility_count']} fallback or queried facilities."
     return AssistantResponse(intent="state_comparison", answer=answer, chart_type="state_average_bar", data=data)
 
 
@@ -55,7 +55,7 @@ def _low_confidence(store: DataStore, procedure: str) -> AssistantResponse:
         for item in ranked_facilities(store, procedure, None, 100)
         if item.score < 5.5 or any("sparse" in flag.lower() or "no source" in flag.lower() for flag in item.uncertainty_flags)
     ][:10]
-    answer = f"I found {len(items)} lower-confidence {procedure} claims. Prioritize verifying service availability, recent activity, and procedure-specific equipment before referral."
+    answer = f"I found {len(items)} lower-confidence {procedure_label(procedure)} claims. Prioritize verifying service availability, recent activity, and procedure-specific equipment before referral."
     return AssistantResponse(
         intent="low_confidence_claims",
         answer=answer,
@@ -74,8 +74,8 @@ def _facility_explanation(store: DataStore, query: AssistantQuery, procedure: st
         return AssistantResponse(intent="facility_explanation", answer="No matching facility was found.", uncertainty_flags=["Facility identifier was missing or unknown."])
     score = score_facility(facility, procedure)
     strongest = sorted(score.score_breakdown, key=lambda item: item.score, reverse=True)[:3]
-    parts = ", ".join(f"{item.label} {item.score}/{item.max_score}" for item in strongest)
-    answer = f"{facility.name} scores {score.total_score:.1f}/10 for {procedure}. Strongest contributors are {parts}. Verify current availability directly before acting on the ranking."
+    parts = ", ".join(f"{item.label} {_compact_score(item.score)}/{_compact_score(item.max_score)}" for item in strongest)
+    answer = f"{facility.name} scores {score.total_score:.1f}/10 for {procedure_label(procedure)}. Strongest contributors are {parts}. Verify current availability directly before acting on the ranking."
     return AssistantResponse(
         intent="facility_explanation",
         answer=answer,
@@ -89,7 +89,7 @@ def _verified_comparison(store: DataStore, procedure: str) -> AssistantResponse:
     items = ranked_facilities(store, procedure, None, 100)
     verified = [item for item in items if item.human_verification_status == "verified"]
     needs_review = [item for item in items if item.human_verification_status == "needs_review"]
-    answer = f"{len(verified)} facilities have verified {procedure} claims and {len(needs_review)} need review. Human verification adds up to 1.5 points and rejected claims are penalized."
+    answer = f"{len(verified)} facilities have verified {procedure_label(procedure)} claims and {len(needs_review)} need review. Human verification adds up to 1.5 points and rejected claims are penalized."
     return AssistantResponse(
         intent="verified_comparison",
         answer=answer,
@@ -129,26 +129,20 @@ def ranked_facilities(
             continue
         if normalized_pincode and (facility.pincode or "").lower() != normalized_pincode:
             continue
-        score = score_facility(facility, procedure)
-        items.append(
-            FacilityTopItem(
-                **facility.dict(),
-                score=score.total_score,
-                score_breakdown=score.score_breakdown,
-                uncertainty_flags=score.uncertainty_flags,
-                evidence_snippets=score.evidence_snippets,
-            )
-        )
+        items.append(facility_top_item(facility, procedure))
     return sorted(items, key=lambda item: (item.score, item.human_verification_count), reverse=True)[:limit]
 
 
-def _procedure_from_query(explicit: str | None, question: str) -> str:
-    if explicit in PROCEDURES:
-        return explicit
-    for procedure_id, definition in PROCEDURES.items():
-        if procedure_id in question:
-            return procedure_id
-        for term in definition["terms"]:
-            if str(term).lower() in question:
-                return procedure_id
-    return "eye_care"
+def facility_top_item(facility, procedure: str) -> FacilityTopItem:
+    score = score_facility(facility, procedure)
+    return FacilityTopItem(
+        **facility.model_dump(),
+        score=score.total_score,
+        score_breakdown=score.score_breakdown,
+        uncertainty_flags=score.uncertainty_flags,
+        evidence_snippets=score.evidence_snippets,
+    )
+
+
+def _compact_score(value: float) -> str:
+    return f"{float(value):.2f}".rstrip("0").rstrip(".")

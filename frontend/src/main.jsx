@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
@@ -11,18 +11,11 @@ const SERVICE_FALLBACK = [
   { service_id: 'maternity_obgyn', service_label: 'Maternity / OBGYN', specialty_group: 'Maternity / OBGYN' },
   { service_id: 'emergency_trauma', service_label: 'Emergency / trauma', specialty_group: 'Emergency / Trauma' },
 ];
-const AGE_FALLBACK = [
-  { value: 'all', label: 'All age groups' },
-  { value: 'child', label: 'Children / pediatric' },
-  { value: 'adult', label: 'Adults' },
-  { value: 'senior', label: 'Seniors' },
-];
 const TABS = [
   { id: 'explorer', label: 'Explorer' },
   { id: 'map', label: 'Map + Radius' },
   { id: 'verification', label: 'Verification' },
-  { id: 'assistant', label: 'Chart Assistant' },
-  { id: 'shortlists', label: 'Shortlists' },
+  { id: 'assistant', label: 'Chat Assistant' },
 ];
 const fallbackFacilities = [
   { unique_id: 'fallback-aravind-madurai', name: 'Aravind Eye Hospital, Madurai', country: 'India', state: 'Tamil Nadu', city: 'Madurai', pincode: '625020', latitude: 9.9252, longitude: 78.1198, score: 8.5, confidence_label: 'High', specialties: ['Ophthalmology'], evidence_summary: 'Cataract, retina, glaucoma and ophthalmic equipment evidence appears in source fields.', source_urls: ['https://aravind.org/hospitals/madurai/'], uncertainty_flags: ['Verify live procedure availability before referral.'] },
@@ -35,6 +28,10 @@ const api = async (path, options) => {
   return res.json();
 };
 const fmt = (value) => Number(value || 0).toFixed(1);
+const fmtCompactScore = (value) => {
+  const n = Number(value || 0);
+  return Number.isFinite(n) ? n.toFixed(2).replace(/\.?0+$/, '') : '0';
+};
 const TERM_LABELS = {
   internalMedicine: 'Internal medicine',
   generalSurgery: 'General surgery',
@@ -73,15 +70,6 @@ function termList(values, limit = 6) {
   const seen = new Set();
   return items.map(humanizeTerm).filter((x) => x && !seen.has(x) && seen.add(x)).slice(0, limit);
 }
-function EvidenceChips({ facility, compact = false }) {
-  const groups = [
-    ['Specialties', termList(facility.specialties, compact ? 3 : 6)],
-    ['Procedures', termList(facility.procedures, compact ? 3 : 6)],
-    ['Equipment', termList(facility.equipment, compact ? 2 : 5)],
-  ].filter(([, items]) => items.length);
-  if (!groups.length) return <small>{facility.description || 'Evidence extracted from facility fields.'}</small>;
-  return <div className={compact ? 'evidenceCompact' : 'evidenceChips'}>{groups.slice(0, compact ? 2 : 3).map(([label, items]) => <div key={label} className="chipGroup"><span>{label}</span>{items.map((item) => <i key={item}>{item}</i>)}</div>)}</div>;
-}
 function EvidencePillGroup({ title, items, empty }) {
   return <div className="trustPillGroup"><h3>{title}</h3>{items.length ? <div className="trustPills">{items.map((item) => <span key={item}>{item}</span>)}</div> : <p>{empty}</p>}</div>;
 }
@@ -110,21 +98,13 @@ function distanceKm(a, b) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 const rad = (d) => d * Math.PI / 180;
-function projectPoint(f) {
-  const lat = Number(f.latitude), lon = Number(f.longitude);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return { left: 50, top: 50 };
-  const left = Math.max(4, Math.min(96, ((lon - 68) / (98 - 68)) * 100));
-  const top = Math.max(4, Math.min(96, (1 - ((lat - 6) / (37 - 6))) * 100));
-  return { left, top };
-}
-
-function AppHeader({ activeTab, setActiveTab, onPlayVoice }) {
+function AppHeader({ activeTab, setActiveTab }) {
   return <header className="topbar">
     <div className="brandNav">
-      <div className="brandBlock"><div className="brand">Care<span>Signal</span></div><div className="brandSub">Facility Trust Desk</div></div>
-      <nav className="tabs" aria-label="Main sections">{TABS.map((tab) => <button key={tab.id} className={activeTab === tab.id ? 'active' : ''} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav>
+      <div className="brandBlock"><div className="brand">Care<span>Trust</span></div><div className="brandSub">Facility Trust Desk</div></div>
+      <nav className="tabs" aria-label="Main sections">{TABS.map((tab) => <button key={tab.id} className={`${activeTab === tab.id ? 'active' : ''} ${tab.id === 'assistant' ? 'assistantTab' : ''}`.trim()} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav>
     </div>
-    <div className="callTop"><b>Digital call assistant</b><a href="tel:+141****0126">Call CareSignal</a><button onClick={onPlayVoice}>Play voice</button></div>
+    <div className="callTop"><b>Digital call assistant</b><a href="tel:+18887078012">Call +1 888 707 8012</a></div>
   </header>;
 }
 function FilterBar({ filters, values, setters, services }) {
@@ -140,7 +120,7 @@ function FilterBar({ filters, values, setters, services }) {
 }
 function Metrics({ facilities, selected, radius }) {
   const verified = facilities.filter((f) => displayConfidence(f) === 'Human verified').length;
-  return <div className="metricrow kpiRow" aria-label="CareSignal KPI cards">
+  return <div className="metricrow kpiRow" aria-label="CareTrust KPI cards">
     <div className="metric kpiCard"><small>Visible facilities</small><strong>{facilities.length}</strong></div>
     <div className="metric kpiCard"><small>Top score / 10</small><strong>{fmt(facilities[0]?.score)}</strong></div>
     <div className="metric kpiCard"><small>Human verified</small><strong>{verified}</strong></div>
@@ -160,7 +140,7 @@ function TrustCard({ facility, serviceLabel, onClose }) {
   const specialties = termList(facility.specialties, 12);
   const procedures = termList(facility.procedures, 12);
   const equipment = termList(facility.equipment, 8);
-  return <div className="trustModal" role="dialog" aria-modal="true" aria-label={`Trust Card for ${facility.name}`} onClick={onClose}><aside className="card trust trustSheet" onClick={(e) => e.stopPropagation()}><button className="trustClose" aria-label="Close Trust Card" onClick={onClose}>×</button><div className="trustHero"><div><span className="eyebrow">Facility Trust Card</span><h2>{facility.name}</h2><p>{[facility.city, facility.state, facility.pincode].filter(Boolean).join(', ') || 'Location pending'}</p></div><div className="scoreBubble"><b>{fmt(facility.score)}</b><span>/10</span></div></div><div className="trustClaim"><span className={`badge ${classForConfidence(displayConfidence(facility))}`}>{displayConfidence(facility)}</span><p><b>Claim:</b> Supports {serviceLabel}.</p></div><div className="trustSection trustEvidenceLead"><EvidencePillGroup title="Specialties" items={specialties} empty="No specialty claims extracted yet." /><EvidencePillGroup title="Procedures" items={procedures} empty="No procedure claims extracted yet." />{equipment.length > 0 && <EvidencePillGroup title="Equipment / services" items={equipment} empty="" />}{facility.description && <p className="trustDescription">{facility.description.slice(0, 240)}</p>}</div><div className="trustSection"><h3>Score breakdown</h3><div className="why">{entries.slice(0, 8).map(([k, v, m]) => <div key={k}><b>{Number(v || 0).toFixed(2)}{m ? `/${m}` : ''}</b><span>{humanizeTerm(k)}</span></div>)}</div></div><div className="sources trustSection"><h3>Sources</h3>{sources.slice(0, 3).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>)}{!sources.length && <span>No source URL available yet.</span>}</div><p className="footer"><b>Uncertainty:</b> {(facility.uncertainty_flags || ['Treat extracted claims as claims to verify, not ground truth.']).join('; ')}</p></aside></div>;
+  return <div className="trustModal" role="dialog" aria-modal="true" aria-label={`Trust Card for ${facility.name}`} onClick={onClose}><aside className="card trust trustSheet" onClick={(e) => e.stopPropagation()}><button className="trustClose" aria-label="Close Trust Card" onClick={onClose}>×</button><div className="trustHero"><div><span className="eyebrow">Facility Trust Card</span><h2>{facility.name}</h2><p>{[facility.city, facility.state, facility.pincode].filter(Boolean).join(', ') || 'Location pending'}</p></div><div className="scoreBubble"><b>{fmt(facility.score)}</b><span>/10</span></div></div><div className="trustClaim"><span className={`badge ${classForConfidence(displayConfidence(facility))}`}>{displayConfidence(facility)}</span><p><b>Claim:</b> Supports {serviceLabel}.</p></div><div className="trustSection trustEvidenceLead"><EvidencePillGroup title="Specialties" items={specialties} empty="No specialty claims extracted yet." /><EvidencePillGroup title="Procedures" items={procedures} empty="No procedure claims extracted yet." />{equipment.length > 0 && <EvidencePillGroup title="Equipment / services" items={equipment} empty="" />}{facility.description && <p className="trustDescription">{facility.description.slice(0, 240)}</p>}</div><div className="trustSection"><h3>Score breakdown</h3><div className="why">{entries.slice(0, 8).map(([k, v, m]) => <div key={k}><b>{fmtCompactScore(v)}{m ? `/${fmtCompactScore(m)}` : ''}</b><span>{humanizeTerm(k)}</span></div>)}</div></div><div className="sources trustSection"><h3>Sources</h3>{sources.slice(0, 3).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>)}{!sources.length && <span>No source URL available yet.</span>}</div><p className="footer"><b>Uncertainty:</b> {(facility.uncertainty_flags || ['Treat extracted claims as claims to verify, not ground truth.']).join('; ')}</p></aside></div>;
 }
 
 function googleMapZoom(radius) {
@@ -171,84 +151,34 @@ function googleEmbedSrc(center, radius) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '';
   return `https://maps.google.com/maps?ll=${encodeURIComponent(`${lat},${lng}`)}&q=${encodeURIComponent(`${lat},${lng}`)}&z=${googleMapZoom(radius)}&t=m&output=embed`;
 }
-function loadGoogleMaps(apiKey) {
-  if (!apiKey) return Promise.reject(new Error('missing Google Maps API key'));
-  if (window.google?.maps) return Promise.resolve(window.google.maps);
-  if (window.__careSignalGoogleMapsPromise) return window.__careSignalGoogleMapsPromise;
-  window.__careSignalGoogleMapsPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => window.google?.maps ? resolve(window.google.maps) : reject(new Error('Google Maps failed to initialize'));
-    script.onerror = () => reject(new Error('Google Maps script failed to load'));
-    document.head.appendChild(script);
-  });
-  return window.__careSignalGoogleMapsPromise;
-}
-function GoogleMapView({ apiKey, facilities, visible, selected, setSelected, center, radius }) {
-  const mapRef = useRef(null);
-  const [mapState, setMapState] = useState(apiKey ? 'loading' : 'embed');
+function GoogleMapView({ center, radius }) {
   const embedSrc = googleEmbedSrc(center, radius);
-  useEffect(() => {
-    let cancelled = false;
-    if (!center?.latitude || !center?.longitude) { setMapState('no-center'); return; }
-    if (!apiKey || !apiKey.startsWith('AIza')) { setMapState('embed'); return; }
-    loadGoogleMaps(apiKey).then((maps) => {
-      if (cancelled || !mapRef.current) return;
-      const centerLatLng = { lat: Number(center.latitude), lng: Number(center.longitude) };
-      const map = new maps.Map(mapRef.current, {
-        center: centerLatLng,
-        zoom: googleMapZoom(radius),
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: true,
-      });
-      const bounds = new maps.LatLngBounds();
-      visible.forEach((f) => {
-        if (!Number.isFinite(Number(f.latitude)) || !Number.isFinite(Number(f.longitude))) return;
-        const pos = { lat: Number(f.latitude), lng: Number(f.longitude) };
-        bounds.extend(pos);
-        const marker = new maps.Marker({
-          position: pos,
-          map,
-          title: `${f.name} • ${fmt(f.score)}/10`,
-          label: selected?.unique_id === f.unique_id ? '★' : undefined,
-        });
-        marker.addListener('click', () => setSelected(f));
-      });
-      new maps.Circle({ map, center: centerLatLng, radius: Number(radius) * 1000, strokeColor: '#ff3621', strokeOpacity: .72, strokeWeight: 2, fillColor: '#ff7a45', fillOpacity: .12 });
-      if (!bounds.isEmpty()) map.fitBounds(bounds, 56);
-      setMapState('ready');
-    }).catch(() => setMapState('embed'));
-    return () => { cancelled = true; };
-  }, [apiKey, center?.unique_id, center?.latitude, center?.longitude, radius, visible.map((f) => f.unique_id).join('|'), selected?.unique_id]);
   if (!embedSrc) return <div className="googleMapWrap"><div className="mapOverlay"><b>Google Maps unavailable</b><span>Select a facility with latitude/longitude to load the map.</span></div></div>;
   return <div className="googleMapWrap"><iframe title={`Google map for ${center?.name || 'selected facility'}`} className="googleMapFrame" src={embedSrc} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /></div>;
 }
 
-function RadiusMap({ facilities, selected, setSelected, radius, setRadius, googleMapsApiKey, onOpenTrust }) {
+function RadiusMap({ facilities, selected, setSelected, radius, setRadius, onOpenTrust }) {
   const center = selected || facilities[0];
-  const visible = facilities.filter((f) => { const d = distanceKm(center, f); return d === null || d <= radius || f.unique_id === center?.unique_id; });
-  return <section className="card mapCard"><div className="cardTitle"><h2>Google Maps radius</h2><span>{visible.length} facilities inside radius</span></div><div className="radiusControl"><label>Radius: <b>{radius} km</b><input type="range" min="25" max="750" step="25" value={radius} onChange={(e) => setRadius(Number(e.target.value))} /></label></div><GoogleMapView apiKey={googleMapsApiKey} facilities={facilities} visible={visible} selected={selected} setSelected={setSelected} center={center} radius={radius} /><div className="mapList">{visible.slice(0, 8).map((f) => <button key={f.unique_id} onClick={() => { setSelected(f); onOpenTrust(f); }}><b>{f.name}</b><span>{distanceKm(center, f)?.toFixed(0) || 0} km • {f.city || f.state} • View Trust Card</span></button>)}</div></section>;
+  const visible = useMemo(() => facilities.map((f) => ({ facility: f, distance: distanceKm(center, f) })).filter(({ facility, distance }) => distance === null || distance <= radius || facility.unique_id === center?.unique_id), [facilities, center?.unique_id, center?.latitude, center?.longitude, radius]);
+  return <section className="card mapCard"><div className="cardTitle"><h2>Google Maps radius</h2><span>{visible.length} facilities inside radius</span></div><div className="radiusControl"><label>Radius: <b>{radius} km</b><input type="range" min="25" max="750" step="25" value={radius} onChange={(e) => setRadius(Number(e.target.value))} /></label></div><GoogleMapView center={center} radius={radius} /><div className="mapList">{visible.slice(0, 8).map(({ facility: f, distance }) => <button key={f.unique_id} onClick={() => { setSelected(f); onOpenTrust(f); }}><b>{f.name}</b><span>{distance?.toFixed(0) || 0} km • {f.city || f.state} • View Trust Card</span></button>)}</div></section>;
 }
 function VerificationForm({ facility, service, serviceLabel, onVerified }) {
   const [status, setStatus] = useState('verified'); const [notes, setNotes] = useState('Verified by phone or visit.');
   if (!facility) return null;
-  const submit = async () => { const payload = { unique_id: facility.unique_id, procedure: service, status, verifier_name: 'CareSignal demo user', notes }; try { await api('/api/verifications', { method: 'POST', body: JSON.stringify(payload) }); } catch (_) {} onVerified(status); };
+  const submit = async () => { const payload = { unique_id: facility.unique_id, procedure: service, status, verifier_name: 'CareTrust demo user', notes }; try { const result = await api('/api/verifications', { method: 'POST', body: JSON.stringify(payload) }); onVerified(status, result.facility); } catch (_) { onVerified(status); } };
   return <section className="card verification"><div className="cardTitle"><h2>Human verification</h2><span>{facility.name}</span></div><p>Call or visit the facility, verify {serviceLabel}, then feed confirmed facts back into ranking.</p><div className="checklist"><label><input type="checkbox" /> Service currently available</label><label><input type="checkbox" /> Equipment/facilities confirmed</label><label><input type="checkbox" /> Specialists/referral pathway confirmed</label></div><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="verified">Verified</option><option value="needs_review">Needs review</option><option value="rejected">Rejected</option></select><textarea value={notes} onChange={(e) => setNotes(e.target.value)} /><button onClick={submit}>Submit verification</button></section>;
 }
-function AssistantPanel({ service, serviceLabel, selected }) {
+function AssistantPanel({ service, serviceLabel, selected, onPlayVoice }) {
   const [question, setQuestion] = useState(`Show top ${serviceLabel} facilities and explain evidence.`); const [answer, setAnswer] = useState(null);
   const ask = async () => { try { setAnswer(await api('/api/assistant/query', { method: 'POST', body: JSON.stringify({ question, procedure: service, unique_id: selected?.unique_id }) })); } catch (_) { setAnswer({ answer: 'Rankings combine evidence fields, sources, contactability, location completeness and human verification.', data: [] }); } };
-  return <section className="card chartAssistant"><div className="cardTitle"><h2>Conversational chart assistant</h2><span>Safe query templates</span></div><textarea value={question} onChange={(e) => setQuestion(e.target.value)} /><button onClick={ask}>Generate answer</button>{answer && <div className="assistantAnswer"><p>{answer.answer}</p><div className="bars">{(answer.data || []).slice(0, 6).map((row, i) => <div key={row.facility || row.name || i}><span>{row.facility || row.name || row.state}</span><i style={{ width: `${Math.min(100, (row.score || row.average_score || 5) * 10)}%` }} /></div>)}</div></div>}</section>;
+  return <section className="card chartAssistant"><div className="cardTitle"><h2>Chat assistant</h2><span>Safe query templates</span></div><textarea value={question} onChange={(e) => setQuestion(e.target.value)} /><div className="assistantActions"><button onClick={ask}>Generate answer</button><button className="voiceSampleBtn" onClick={onPlayVoice}>Voice sample</button></div>{answer && <div className="assistantAnswer"><p>{answer.answer}</p><div className="bars">{(answer.data || []).slice(0, 6).map((row, i) => <div key={row.facility || row.name || i}><span>{row.facility || row.name || row.state}</span><i style={{ width: `${Math.min(100, (row.score || row.average_score || 5) * 10)}%` }} /></div>)}</div></div>}</section>;
 }
 function Shortlists({ selected, shortlists, onAdd }) { return <section className="card"><div className="cardTitle"><h2>Shortlists</h2><span>Planner decisions</span></div><button onClick={onAdd} disabled={!selected}>Add selected facility</button><div className="shortlistItems">{shortlists.map((x) => <div key={x.id} className="shortlistItem"><b>{x.name}</b><small>{x.meta}</small></div>)}{!shortlists.length && <p className="empty">No shortlisted facilities yet.</p>}</div></section>; }
 function ServiceTable({ services }) { return <section className="card"><div className="cardTitle"><h2>Services grouped by specialty</h2><span>Derived table preview</span></div><table className="rank"><thead><tr><th>Service</th><th>Specialty group</th><th>Keywords</th></tr></thead><tbody>{services.map((s) => <tr key={s.service_id}><td>{s.service_label}</td><td>{s.specialty_group}</td><td><small>{s.keywords}</small></td></tr>)}</tbody></table></section>; }
 
 function App() {
   const [activeTab, setActiveTab] = useState('explorer');
-  const [filters, setFilters] = useState({ countries: [{ value: 'India', label: 'India' }], states: [], cities: [], pincodes: [], services: SERVICE_FALLBACK, age_groups: AGE_FALLBACK });
+  const [filters, setFilters] = useState({ countries: [{ value: 'India', label: 'India' }], states: [], cities: [], pincodes: [], services: SERVICE_FALLBACK });
   const [country, setCountry] = useState('India'), [state, setState] = useState(''), [city, setCity] = useState(''), [pincode, setPincode] = useState(''), [service, setService] = useState('cardiac_surgery');
   const [facilities, setFacilities] = useState(fallbackFacilities); const [selected, setSelected] = useState(fallbackFacilities[0]); const [trustOpen, setTrustOpen] = useState(false); const [radius, setRadius] = useState(250); const [shortlists, setShortlists] = useState([]);
   const services = filters.services?.length ? filters.services : SERVICE_FALLBACK;
@@ -258,9 +188,9 @@ function App() {
   useEffect(() => { const onKey = (e) => { if (e.key === 'Escape') setTrustOpen(false); }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, []);
   const playVoice = async () => { const audio = new Audio('/api/voice/sample'); try { await audio.play(); } catch { window.open('/api/voice/sample', '_blank'); } };
   const openTrust = (facility = selected) => { if (facility) { setSelected(facility); setTrustOpen(true); } };
-  const onVerified = (status) => { if (!selected) return; const delta = status === 'verified' ? 1.5 : status === 'rejected' ? -2 : 0.5; const updated = { ...selected, human_verification_status: status, human_verified: status === 'verified', score: Math.max(0, Math.min(10, Number(selected.score || 0) + delta)) }; setSelected(updated); setFacilities((rows) => rows.map((f) => f.unique_id === updated.unique_id ? updated : f).sort((a, b) => b.score - a.score)); };
+  const onVerified = (status, apiFacility) => { if (!selected) return; const delta = status === 'verified' ? 1.5 : status === 'rejected' ? -2 : 0.5; const updated = normalizeFacility(apiFacility || { ...selected, human_verification_status: status, human_verified: status === 'verified', score: Math.max(0, Math.min(10, Number(selected.score || 0) + delta)) }, 0); setSelected(updated); setFacilities((rows) => rows.map((f) => f.unique_id === updated.unique_id ? updated : f).sort((a, b) => b.score - a.score)); };
   const addShortlist = async () => { if (!selected) return; setShortlists((x) => [{ id: `${selected.unique_id}-${Date.now()}`, name: selected.name, meta: `${serviceLabel} • ${selected.city || selected.state || 'India'}` }, ...x]); try { await api('/api/shortlists', { method: 'POST', body: JSON.stringify({ unique_id: selected.unique_id, procedure: service, notes: `${serviceLabel} shortlist` }) }); } catch (_) {} };
-  return <><AppHeader activeTab={activeTab} setActiveTab={setActiveTab} onPlayVoice={playVoice} /><main className="main"><section className="hero filtersOnly"><FilterBar filters={filters} values={{ country, state, city, pincode, service, radius }} setters={{ setCountry, setState, setCity, setPincode, setService, setRadius }} services={services} /></section><Metrics facilities={facilities} selected={selected} radius={radius} />{activeTab === 'explorer' && <div className="grid single"><FacilityTable facilities={facilities} selected={selected} setSelected={setSelected} onOpenTrust={openTrust} /></div>}{activeTab === 'map' && <div className="grid single"><RadiusMap facilities={facilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} onOpenTrust={openTrust} /></div>}{activeTab === 'verification' && <div className="grid"><VerificationForm facility={selected} service={service} serviceLabel={serviceLabel} onVerified={onVerified} /><section className="card"><div className="cardTitle"><h2>Selected facility</h2><span>{selected?.name || 'None selected'}</span></div><button className="trustOpenWide" onClick={() => openTrust()} disabled={!selected}>Open Trust Card</button></section></div>}{activeTab === 'assistant' && <div className="grid"><AssistantPanel service={service} serviceLabel={serviceLabel} selected={selected} /><RadiusMap facilities={facilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} onOpenTrust={openTrust} /></div>}{activeTab === 'shortlists' && <div className="grid"><Shortlists selected={selected} shortlists={shortlists} onAdd={addShortlist} /><ServiceTable services={services} /></div>}{trustOpen && <TrustCard facility={selected} serviceLabel={serviceLabel} onClose={() => setTrustOpen(false)} />}</main></>;
+  return <><AppHeader activeTab={activeTab} setActiveTab={setActiveTab} /><main className="main"><section className="hero filtersOnly"><FilterBar filters={filters} values={{ country, state, city, pincode, service, radius }} setters={{ setCountry, setState, setCity, setPincode, setService, setRadius }} services={services} /></section><Metrics facilities={facilities} selected={selected} radius={radius} />{activeTab === 'explorer' && <div className="grid single"><FacilityTable facilities={facilities} selected={selected} setSelected={setSelected} onOpenTrust={openTrust} /></div>}{activeTab === 'map' && <div className="grid single"><RadiusMap facilities={facilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} onOpenTrust={openTrust} /></div>}{activeTab === 'verification' && <div className="grid"><VerificationForm facility={selected} service={service} serviceLabel={serviceLabel} onVerified={onVerified} /><section className="card"><div className="cardTitle"><h2>Selected facility</h2><span>{selected?.name || 'None selected'}</span></div><button className="trustOpenWide" onClick={() => openTrust()} disabled={!selected}>Open Trust Card</button><button className="trustOpenWide shortlistInline" onClick={addShortlist} disabled={!selected}>Add to shortlist</button><button className="trustOpenWide shortlistInline" onClick={() => setActiveTab('shortlists')} disabled={!shortlists.length}>View shortlists</button><p className="empty">Shortlisted facilities this session: {shortlists.length}</p></section></div>}{activeTab === 'assistant' && <div className="grid"><RadiusMap facilities={facilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} onOpenTrust={openTrust} /><AssistantPanel service={service} serviceLabel={serviceLabel} selected={selected} onPlayVoice={playVoice} /></div>}{activeTab === 'shortlists' && <div className="grid"><Shortlists selected={selected} shortlists={shortlists} onAdd={addShortlist} /><ServiceTable services={services} /></div>}{trustOpen && <TrustCard facility={selected} serviceLabel={serviceLabel} onClose={() => setTrustOpen(false)} />}</main></>;
 }
 
 createRoot(document.getElementById('root')).render(<App />);

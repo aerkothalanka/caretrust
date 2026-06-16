@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from functools import lru_cache
 from typing import Iterable
 
 from .models import Facility, FacilityScore, ScoreBreakdownItem
@@ -73,9 +74,37 @@ SCORE_ALLOCATION: list[tuple[str, str, float]] = [
 ]
 
 
-def procedure_terms(procedure: str, kind: str = "terms") -> list[str]:
+def procedure_label(procedure: str) -> str:
+    definition = PROCEDURES.get(procedure, {})
+    return str(definition.get("label") or procedure.replace("_", " "))
+
+
+def infer_procedure(explicit: str | None, question: str, *, default: str | None = "eye_care") -> str | None:
+    if explicit in PROCEDURES:
+        return explicit
+    q = question.lower()
+    for procedure_id in PROCEDURES:
+        if procedure_id in q or procedure_id.replace("_", " ") in q or procedure_label(procedure_id).lower() in q:
+            return procedure_id
+        if any(term in q for term in procedure_terms(procedure_id)):
+            return procedure_id
+    return default
+
+
+@lru_cache(maxsize=None)
+def procedure_terms(procedure: str, kind: str = "terms") -> tuple[str, ...]:
     raw = PROCEDURES.get(procedure, {}).get(kind, [])
-    return [str(term).lower() for term in raw]
+    return tuple(str(term).lower() for term in raw) if isinstance(raw, list) else ()
+
+
+@lru_cache(maxsize=1)
+def all_procedure_terms() -> frozenset[str]:
+    terms: set[str] = set()
+    for procedure_id in PROCEDURES:
+        terms.update(_normalize_token(procedure_id).split())
+        terms.update(_normalize_token(procedure_label(procedure_id)).split())
+        terms.update(term for term in procedure_terms(procedure_id) if len(term) >= 3)
+    return frozenset(term for term in terms if len(term) >= 3)
 
 
 def score_facility(facility: Facility, procedure: str) -> FacilityScore:
@@ -95,12 +124,14 @@ def score_facility(facility: Facility, procedure: str) -> FacilityScore:
     evidence: list[str] = []
 
     specialty_hits = _hits(terms, specialty_text)
-    score = 1.5 if specialty_hits else (0.75 if _hits(terms, all_text) else 0.0)
-    breakdown.append(_item("specialties_match", "Specialties match", 1.5, score, specialty_hits or _hits(terms, all_text)))
+    all_term_hits = _hits(terms, all_text)
+    description_term_hits = _hits(terms, description)
+    score = 1.5 if specialty_hits else (0.75 if all_term_hits else 0.0)
+    breakdown.append(_item("specialties_match", "Specialties match", 1.5, score, specialty_hits or all_term_hits))
 
     procedure_hits = _hits(terms, procedure_text)
-    score = 1.5 if procedure_hits else (0.75 if _hits(terms, description) else 0.0)
-    breakdown.append(_item("procedure_match", "Procedure match", 1.5, score, procedure_hits or _hits(terms, description)))
+    score = 1.5 if procedure_hits else (0.75 if description_term_hits else 0.0)
+    breakdown.append(_item("procedure_match", "Procedure match", 1.5, score, procedure_hits or description_term_hits))
 
     equipment_hits = _hits(equipment_terms, equipment_text) or _hits(equipment_terms, description)
     score = min(1.0, 0.5 + 0.25 * (len(equipment_hits) - 1)) if equipment_hits else 0.0
@@ -202,6 +233,10 @@ def _hits(terms: Iterable[str], text: str) -> list[str]:
     return seen
 
 
+def _normalize_token(value: str | None) -> str:
+    return " ".join("".join(char if char.isalnum() else " " for char in (value or "").lower()).split())
+
+
 def _item(key: str, label: str, max_score: float, score: float, evidence: list[str]) -> ScoreBreakdownItem:
     return ScoreBreakdownItem(
         key=key,
@@ -225,7 +260,7 @@ def _freshness_score(value: str | None) -> float:
     return 0.1
 
 
-def _evidence_from_facility(facility: Facility, terms: list[str]) -> list[str]:
+def _evidence_from_facility(facility: Facility, terms: Iterable[str]) -> list[str]:
     snippets: list[str] = []
     fields = [
         ("Specialties", ", ".join(facility.specialties)),

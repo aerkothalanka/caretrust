@@ -16,7 +16,7 @@ SAMPLE_TTS_PATH = Path("/Users/avirkothalanka/.hermes/profiles/dais2026/audio_ca
 GEMINI_LIVE_MODEL = os.getenv("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
 GEMINI_LIVE_VOICE = os.getenv("GEMINI_LIVE_VOICE", "Puck")
 GEMINI_TIMEOUT_SECONDS = float(os.getenv("GEMINI_LIVE_TIMEOUT_SECONDS", "14"))
-GEMINI_SAMPLE_WAV = Path(tempfile.gettempdir()) / "caresignal_gemini_live_sample.wav"
+GEMINI_SAMPLE_WAV = Path(tempfile.gettempdir()) / "caretrust_gemini_live_sample.wav"
 
 
 @dataclass
@@ -30,12 +30,16 @@ def gemini_realtime_status() -> dict[str, object]:
     """Return non-sensitive Gemini Live configuration status for UI/API probes."""
     return {
         "provider": "gemini-live",
-        "enabled": bool(os.getenv("GEMINI_API_KEY")),
+        "enabled": gemini_enabled(),
         "model": GEMINI_LIVE_MODEL,
         "voice": GEMINI_LIVE_VOICE,
         "response_modalities": ["AUDIO", "TEXT"],
         "transport": "Gemini Live API via Google GenAI SDK",
     }
+
+
+def gemini_enabled() -> bool:
+    return bool(os.getenv("GEMINI_API_KEY"))
 
 
 def build_voice_response(store: DataStore, request: VoiceRequest) -> VoiceResponse:
@@ -49,11 +53,11 @@ def build_voice_response(store: DataStore, request: VoiceRequest) -> VoiceRespon
         ),
     )
     deterministic_text = (
-        f"CareSignal summary: {assistant_response.answer} "
+        f"CareTrust summary: {assistant_response.answer} "
         "For a live referral, confirm department availability, appointment timing, costs, and emergency readiness."
     )
     prompt = _voice_prompt(request.transcript, deterministic_text)
-    gemini_result = _run_gemini_live_text(prompt) if os.getenv("GEMINI_API_KEY") else GeminiLiveResult()
+    gemini_result = _run_gemini_live(prompt, audio=False) if gemini_enabled() else GeminiLiveResult()
     text = gemini_result.text or deterministic_text
     provider = "gemini-live" if gemini_result.text else "deterministic-fallback"
     logged = store.log_voice_turn(session_id, request, text, assistant_response.intent)
@@ -65,22 +69,22 @@ def build_voice_response(store: DataStore, request: VoiceRequest) -> VoiceRespon
         intent=assistant_response.intent,
         logged=logged,
         provider=provider,
-        realtime_model=GEMINI_LIVE_MODEL if os.getenv("GEMINI_API_KEY") else None,
+        realtime_model=GEMINI_LIVE_MODEL if gemini_enabled() else None,
         realtime_error=gemini_result.error,
     )
 
 
 def gemini_sample_audio_path() -> Path | None:
     """Generate/cache a short Gemini Live audio sample when configured; fallback to static TTS."""
-    if not os.getenv("GEMINI_API_KEY"):
+    if not gemini_enabled():
         return SAMPLE_TTS_PATH if SAMPLE_TTS_PATH.exists() else None
     if GEMINI_SAMPLE_WAV.exists() and GEMINI_SAMPLE_WAV.stat().st_size > 44:
         return GEMINI_SAMPLE_WAV
     prompt = (
-        "You are CareSignal's Facility Trust Desk voice assistant. In one brief sentence, "
+        "You are CareTrust's Facility Trust Desk voice assistant. In one brief sentence, "
         "say that you can explain facility rankings, evidence, uncertainty, and verification steps."
     )
-    result = _run_gemini_live_audio(prompt)
+    result = _run_gemini_live(prompt, audio=True)
     if result.audio_path and result.audio_path.exists():
         return result.audio_path
     return SAMPLE_TTS_PATH if SAMPLE_TTS_PATH.exists() else None
@@ -88,25 +92,18 @@ def gemini_sample_audio_path() -> Path | None:
 
 def _voice_prompt(user_transcript: str, deterministic_context: str) -> str:
     return (
-        "You are CareSignal's realtime voice assistant for healthcare facility planners. "
+        "You are CareTrust's realtime voice assistant for healthcare facility planners. "
         "Answer conversationally in 2-3 short sentences. Explain rankings, evidence, uncertainty, "
         "and human verification steps. Do not provide medical advice; focus on facility capability evidence.\n\n"
         f"User said: {user_transcript}\n"
-        f"CareSignal context: {deterministic_context}"
+        f"CareTrust context: {deterministic_context}"
     )
 
 
-def _run_gemini_live_text(prompt: str) -> GeminiLiveResult:
+def _run_gemini_live(prompt: str, *, audio: bool) -> GeminiLiveResult:
     try:
-        return asyncio.run(_gemini_live_turn(prompt, audio=False))
+        return asyncio.run(_gemini_live_turn(prompt, audio=audio))
     except Exception as exc:  # pragma: no cover - protects demo fallback when API/key/model is unavailable.
-        return GeminiLiveResult(error=_safe_error(exc))
-
-
-def _run_gemini_live_audio(prompt: str) -> GeminiLiveResult:
-    try:
-        return asyncio.run(_gemini_live_turn(prompt, audio=True))
-    except Exception as exc:  # pragma: no cover
         return GeminiLiveResult(error=_safe_error(exc))
 
 
@@ -128,7 +125,7 @@ async def _gemini_live_turn(prompt: str, *, audio: bool) -> GeminiLiveResult:
             parts=[
                 types.Part(
                     text=(
-                        "You are CareSignal, a concise, calm facility trust desk voice assistant. "
+                        "You are CareTrust, a concise, calm facility trust desk voice assistant. "
                         "Use evidence-grounded language and remind users to verify live availability."
                     )
                 )

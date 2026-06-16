@@ -155,7 +155,8 @@ class DataStore:
     def start_or_get_voice_session(self, session_id: str | None) -> str:
         active_id = session_id or str(uuid.uuid4())
         if active_id not in self._voice_sessions:
-            record = {"session_id": active_id, "created_at": _now_iso(), "last_turn_at": _now_iso()}
+            now = _now_iso()
+            record = {"session_id": active_id, "created_at": now, "last_turn_at": now}
             self._voice_sessions[active_id] = record
             self._insert_lakebase("voice_assistant_sessions", record)
         return active_id
@@ -206,8 +207,8 @@ class DataStore:
         related = [record for record in self._verifications if record["unique_id"] == facility.unique_id]
         if not related:
             return facility
-        latest = sorted(related, key=lambda row: row["created_at"])[-1]
-        return facility.copy(
+        latest = max(related, key=lambda row: row["created_at"])
+        return facility.model_copy(
             update={
                 "human_verification_status": latest["status"],
                 "human_verification_count": len(related),

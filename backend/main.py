@@ -3,12 +3,12 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .assistant import answer_query, ranked_facilities
+from .assistant import answer_query, facility_top_item, ranked_facilities
 from .data import APP_SCHEMA, FACILITIES_TABLE, NFHS_TABLE, PINCODE_TABLE, DataStore
 from .models import (
     AssistantQuery,
@@ -22,10 +22,11 @@ from .models import (
     VoiceResponse,
 )
 from .scoring import PROCEDURES, score_facility
+from .twilio_voice import twilio_voice_entrypoint, twilio_voice_respond
 from .voice import SAMPLE_TTS_PATH, build_voice_response, gemini_realtime_status, gemini_sample_audio_path
 
 
-app = FastAPI(title="CareSignal API", version="0.1.0")
+app = FastAPI(title="CareTrust API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CARESIGNAL_CORS_ORIGINS", "*").split(","),
@@ -119,11 +120,11 @@ def trust_card(unique_id: str, procedure: str = Query("eye_care")) -> TrustCard:
 @app.post("/api/verifications", response_model=VerificationResponse)
 def verifications(request: VerificationRequest) -> VerificationResponse:
     _validate_procedure(request.procedure)
-    if store.get_facility(request.unique_id) is None:
+    facility = store.get_facility(request.unique_id)
+    if facility is None:
         raise HTTPException(status_code=404, detail="Facility not found")
     record = store.add_verification(request)
-    facility = ranked_facilities(store, request.procedure, None, 100)
-    updated = next(item for item in facility if item.unique_id == request.unique_id)
+    updated = facility_top_item(store.get_facility(request.unique_id) or facility, request.procedure)
     return VerificationResponse(ok=True, verification_id=record["verification_id"], facility=updated)
 
 
@@ -166,22 +167,34 @@ def voice_respond(request: VoiceRequest) -> VoiceResponse:
     return build_voice_response(store, request)
 
 
+@app.api_route("/api/twilio/voice", methods=["GET", "POST"])
+async def twilio_voice(request: Request):
+    return await twilio_voice_entrypoint(request)
+
+
+@app.post("/api/twilio/voice/respond")
+async def twilio_voice_turn(request: Request):
+    return await twilio_voice_respond(store, request)
+
+
 @app.get("/")
 def root():
-    index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(str(index_path))
-    return health()
+    return _frontend_index_response() or health()
 
 
 @app.get("/{full_path:path}")
 def frontend_fallback(full_path: str):
     if full_path.startswith("api/"):
         raise HTTPException(status_code=404, detail="Not found")
-    index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(str(index_path))
+    response = _frontend_index_response()
+    if response:
+        return response
     raise HTTPException(status_code=404, detail="Static frontend is not built; use /api/health.")
+
+
+def _frontend_index_response() -> FileResponse | None:
+    index_path = STATIC_DIR / "index.html"
+    return FileResponse(str(index_path)) if index_path.exists() else None
 
 
 def _validate_procedure(procedure: str) -> None:
