@@ -125,9 +125,14 @@ function FilterBar({ filters, values, setters, services }) {
 }
 
 function FacilityTable({ facilities, selected, setSelected, onOpenTrust, onOpenReview }) {
+  const [rankFilter, setRankFilter] = useState('');
+  const [nameFilter, setNameFilter] = useState('');
+  const [trustFilter, setTrustFilter] = useState('');
+  const [minConfidence, setMinConfidence] = useState('');
   const choose = (f) => { setSelected(f); onOpenTrust(f); };
   const review = (f, e) => { e.stopPropagation(); setSelected(f); onOpenReview?.(f); };
-  return <section className="card rankings"><div className="cardTitle"><h2>Ranked Facilities</h2></div><table className="rank"><thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Confidence %</th><th>Trust Tier</th><th>Evidence</th></tr></thead><tbody>{facilities.map((f, i) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => choose(f)}><td>{i + 1}</td><td><b>{f.name}</b></td><td>{[f.city, f.state, f.pincode].filter(Boolean).join(', ')}</td><td><b>{Math.round(Number(f.score || 0) * 10)}%</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{f.source_row?.trust_tier || displayConfidence(f)}</span></td><td><button className="evidenceLink" onClick={(e) => review(f, e)}>Click Here</button></td></tr>)}</tbody></table>{!facilities.length && <p className="empty">No facilities match these filters. Try all states or a different service.</p>}</section>;
+  const rows = facilities.map((f, i) => ({ f, rank: i + 1, confidence: Math.round(Number(f.score || 0) * 10), trustTier: f.source_row?.trust_tier || displayConfidence(f) })).filter(({ f, rank, confidence, trustTier }) => (!rankFilter || String(rank).startsWith(rankFilter.trim())) && (!nameFilter || String(f.name || '').toLowerCase().includes(nameFilter.trim().toLowerCase())) && (!trustFilter || trustTier.toLowerCase().includes(trustFilter)) && (!minConfidence || confidence >= Number(minConfidence)));
+  return <section className="card rankings"><div className="cardTitle"><h2>Ranked Facilities</h2></div><table className="rank"><thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Confidence %</th><th>Trust Tier</th><th>Evidence</th></tr><tr className="rankFilterRow"><th><input value={rankFilter} onChange={(e) => setRankFilter(e.target.value)} placeholder="Rank" /></th><th><input value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} placeholder="Facility name" /></th><th></th><th><input type="number" min="0" max="100" value={minConfidence} onChange={(e) => setMinConfidence(e.target.value)} placeholder="> %" /></th><th><select value={trustFilter} onChange={(e) => setTrustFilter(e.target.value)}><option value="">All</option><option value="high">High</option><option value="medium">Medium</option><option value="needs">Needs review</option><option value="verified">Verified</option></select></th><th></th></tr></thead><tbody>{rows.map(({ f, rank, confidence, trustTier }) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => choose(f)}><td>{rank}</td><td><span className="facilityName">{f.name}</span></td><td>{[f.city, f.state, f.pincode].filter(Boolean).join(', ')}</td><td><b>{confidence}%</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{trustTier}</span></td><td><button className="evidenceLink" onClick={(e) => review(f, e)}>Click Here</button></td></tr>)}</tbody></table>{!rows.length && <p className="empty">No facilities match these table filters.</p>}</section>;
 }
 
 function TrustCard({ facility, serviceLabel, onClose, onMethodology }) {
@@ -250,7 +255,7 @@ function App() {
   return <>
     <AppHeader activeTab={activeTab} setActiveTab={setActiveTab} selected={selected} />
     <main className="main">
-      <section className="missionStrip">CareSignal helps people find trusted facilities for healthier lives.</section>
+      <section className="missionStrip">CareSignal helps people find trusted facilities for healthier lives</section>
       <section className="hero filtersOnly"><FilterBar filters={filters} values={{ country, state, city, pincode, service, radius }} setters={{ setCountry, setState, setCity, setPincode, setService, setRadius }} services={services} /></section>
       {activeTab === 'explorer' && <div className="grid single"><FacilityTable facilities={displayFacilities} selected={selected} setSelected={setSelected} onOpenTrust={openTrust} onOpenReview={openReview} /></div>}
       {activeTab === 'map' && <div className="grid single"><RadiusMap facilities={displayFacilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} onOpenTrust={openTrust} /></div>}
