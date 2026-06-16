@@ -19,7 +19,7 @@ const TABS = [
   { id: 'explorer', label: 'Facility Explorer' },
   { id: 'map', label: 'Geo Search' },
   { id: 'verification', label: 'Trust Review' },
-  { id: 'assistant', label: 'Chat Assistant' },
+  { id: 'assistant', label: '💬 Chat Assistant' },
 ];
 
 const fallbackFacilities = [
@@ -102,7 +102,7 @@ function distanceKm(a, b) {
 function AppHeader({ activeTab, setActiveTab, selected }) {
   return <header className="topbar">
     <div className="brandNav">
-      <div className="brandBlock"><div className="brand">Care<span>Signal</span></div><div className="brandSub">Facilities Trust Desk - Trust Starts here</div></div>
+      <div className="brandBlock"><div className="brand">Care<span>Signal</span></div><div className="brandSub">Facility Trust Desk - Trust Starts Here</div></div>
       <nav className="tabs" aria-label="Main sections">{TABS.map((tab) => <button key={tab.id} className={`${activeTab === tab.id ? 'active' : ''} ${tab.id === 'assistant' ? 'assistantTab' : ''}`.trim()} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav>
     </div>
     <div className="callTop"><b>Digital call assistant</b><a href={`tel:${PHONE_TEL}`} aria-label={`Call ${PHONE_DISPLAY}`}>☎ {PHONE_DISPLAY}</a></div>
@@ -124,9 +124,10 @@ function FilterBar({ filters, values, setters, services }) {
   </section>;
 }
 
-function FacilityTable({ facilities, selected, setSelected, onOpenTrust }) {
+function FacilityTable({ facilities, selected, setSelected, onOpenTrust, onOpenReview }) {
   const choose = (f) => { setSelected(f); onOpenTrust(f); };
-  return <section className="card rankings"><div className="cardTitle"><h2>Ranked facilities</h2></div><table className="rank"><thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Confidence %</th><th>Trust Tier</th><th>Evidence</th></tr></thead><tbody>{facilities.map((f, i) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => choose(f)}><td>{i + 1}</td><td><b>{f.name}</b></td><td>{[f.city, f.state, f.pincode].filter(Boolean).join(', ')}</td><td><b>{Math.round(Number(f.score || 0) * 10)}%</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{f.source_row?.trust_tier || displayConfidence(f)}</span></td><td><span className="evidenceCell">{f.source_url ? 'Source available' : 'Evidence'}</span></td></tr>)}</tbody></table>{!facilities.length && <p className="empty">No facilities match these filters. Try all states or a different service.</p>}</section>;
+  const review = (f, e) => { e.stopPropagation(); setSelected(f); onOpenReview?.(f); };
+  return <section className="card rankings"><div className="cardTitle"><h2>Ranked Facilities</h2></div><table className="rank"><thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Confidence %</th><th>Trust Tier</th><th>Evidence</th></tr></thead><tbody>{facilities.map((f, i) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => choose(f)}><td>{i + 1}</td><td><b>{f.name}</b></td><td>{[f.city, f.state, f.pincode].filter(Boolean).join(', ')}</td><td><b>{Math.round(Number(f.score || 0) * 10)}%</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{f.source_row?.trust_tier || displayConfidence(f)}</span></td><td><button className="evidenceLink" onClick={(e) => review(f, e)}>Click Here</button></td></tr>)}</tbody></table>{!facilities.length && <p className="empty">No facilities match these filters. Try all states or a different service.</p>}</section>;
 }
 
 function TrustCard({ facility, serviceLabel, onClose, onMethodology }) {
@@ -242,15 +243,16 @@ function App() {
   const displayFacilities = facilities;
   const playVoice = async () => { const audio = new Audio('/api/voice/sample'); try { await audio.play(); } catch { window.open('/api/voice/sample', '_blank'); } };
   const openTrust = (facility = selected) => { if (facility) { setSelected(facility); setTrustOpen(true); } };
+  const openReview = (facility = selected) => { if (facility) setSelected(facility); setActiveTab('verification'); };
   const onVerified = async (status, apiFacility) => { if (!selected) return; const delta = status === 'verified' ? 1.5 : status === 'rejected' ? -2 : 0.5; const updated = normalizeFacility(apiFacility || { ...selected, human_verification_status: status, human_verified: status === 'verified', score: Math.max(0, Math.min(10, Number(selected.score || 0) + delta)) }, 0); setSelected(updated); setFacilities((rows) => rows.map((f) => f.unique_id === updated.unique_id ? updated : f).sort((a, b) => b.score - a.score)); await refreshHistory(); };
   const addShortlist = async () => { if (!selected) return; const optimistic = { id: `${selected.unique_id}-${Date.now()}`, name: selected.name, meta: `${serviceLabel} • ${selected.city || selected.state || 'India'}` }; setShortlists((x) => [optimistic, ...x]); try { await api('/api/shortlists', { method: 'POST', body: JSON.stringify({ unique_id: selected.unique_id, procedure: service, notes: `${serviceLabel} shortlist` }) }); await refreshHistory(); } catch (_) {} };
 
   return <>
     <AppHeader activeTab={activeTab} setActiveTab={setActiveTab} selected={selected} />
     <main className="main">
-      <section className="missionStrip">CareSignal helps people find trusted facilities for healthier lives</section>
+      <section className="missionStrip">CareSignal helps people find trusted facilities for healthier lives.</section>
       <section className="hero filtersOnly"><FilterBar filters={filters} values={{ country, state, city, pincode, service, radius }} setters={{ setCountry, setState, setCity, setPincode, setService, setRadius }} services={services} /></section>
-      {activeTab === 'explorer' && <div className="grid single"><FacilityTable facilities={displayFacilities} selected={selected} setSelected={setSelected} onOpenTrust={openTrust} /></div>}
+      {activeTab === 'explorer' && <div className="grid single"><FacilityTable facilities={displayFacilities} selected={selected} setSelected={setSelected} onOpenTrust={openTrust} onOpenReview={openReview} /></div>}
       {activeTab === 'map' && <div className="grid single"><RadiusMap facilities={displayFacilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} onOpenTrust={openTrust} /></div>}
       {activeTab === 'verification' && <div className="grid"><VerificationForm facility={selected} service={service} serviceLabel={serviceLabel} facilities={displayFacilities} location={city || state || country || 'India'} onVerified={onVerified} onHistory={refreshHistory} /><section className="card"><div className="cardTitle"><h2>Selected facility</h2><span>{selected?.name || 'None selected'}</span></div><button className="trustOpenWide" onClick={() => openTrust()} disabled={!selected}>Open Trust Card</button><button className="trustOpenWide shortlistInline" onClick={addShortlist} disabled={!selected}>Add to shortlist</button><button className="trustOpenWide shortlistInline" onClick={() => setActiveTab('shortlists')} disabled={!shortlists.length && !scenarioShortlists.length}>View shortlists ({shortlists.length + scenarioShortlists.length})</button><p className="empty">Saved actions: {userActions.length} • Scenarios: {scenarioShortlists.length}</p></section><RecentHistory title="Recent user actions" items={userActions} empty="No persisted notes, overrides, or review decisions yet." /><RecentHistory title="Saved scenarios" items={scenarioShortlists} empty="No saved scenarios yet." /><RecentHistory title="Recent verifications" items={recentVerifications} empty="No verification history yet." /></div>}
       {activeTab === 'assistant' && <div className="grid"><RadiusMap facilities={displayFacilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} onOpenTrust={openTrust} /><AssistantPanel service={service} serviceLabel={serviceLabel} selected={selected} onPlayVoice={playVoice} voiceStatus={voiceStatus} /></div>}
