@@ -5,3 +5,4 @@ databricks-sdk>=0.36.0
 databricks-sql-connector>=3.1.0
 psycopg2-binary>=2.9.9
 google-genai>=1.0.0
+crawl4ai>=0.7.0

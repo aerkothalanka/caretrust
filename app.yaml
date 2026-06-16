@@ -20,6 +20,8 @@ env:
     value: "gemini-3.1-flash-live-preview"
   - name: GEMINI_LIVE_VOICE
     value: "Puck"
+  - name: CARESIGNAL_AGENT_BRICKS_ENDPOINT
+    value: "mas-756abd72-endpoint"
   - name: CARESIGNAL_LAKEBASE_ENDPOINT
     value: "projects/hackathon-demo/branches/production/endpoints/primary"
   - name: PGHOST

@@ -18,6 +18,8 @@ from .models import (
     ShortlistRequest,
     ShortlistResponse,
     TrustCard,
+    TrustSourceVerifyRequest,
+    TrustSourceVerifyResponse,
     UserActionRequest,
     UserActionResponse,
     VerificationRequest,
@@ -28,6 +30,7 @@ from .models import (
 from .scoring import PROCEDURES, score_facility
 from .twilio_voice import twilio_voice_entrypoint, twilio_voice_respond
 from .voice import SAMPLE_TTS_PATH, build_voice_response, gemini_realtime_status, gemini_sample_audio_path
+from .trust_verifier import verify_trust_sources
 
 
 app = FastAPI(title="CareSignal API", version="0.1.0")
@@ -133,6 +136,35 @@ def trust_card(unique_id: str, procedure: str = Query("eye_care")) -> TrustCard:
         human_verification_count=facility.human_verification_count,
         verification_notes=store.verification_notes(unique_id, procedure),
     )
+
+
+@app.post("/api/trust/verify-links", response_model=TrustSourceVerifyResponse)
+def verify_trust_links(request: TrustSourceVerifyRequest) -> TrustSourceVerifyResponse:
+    _validate_procedure(request.procedure)
+    facility = store.get_facility(request.unique_id)
+    if facility is None:
+        raise HTTPException(status_code=404, detail="Facility not found")
+    service_label = str(PROCEDURES[request.procedure]["label"])
+    result = verify_trust_sources(facility, request.procedure, service_label, mode=request.mode)
+    store.add_user_action(
+        UserActionRequest(
+            user_id="CareSignal demo user",
+            facility_id=facility.unique_id,
+            action_type="source_verification",
+            action_data={
+                "procedure": request.procedure,
+                "facility_name": facility.name,
+                "mode": request.mode,
+                "status": result.get("status"),
+                "summary": result.get("summary"),
+                "source_count": result.get("source_count"),
+                "verified_count": result.get("verified_count"),
+                "partial_count": result.get("partial_count"),
+                "failed_count": result.get("failed_count"),
+            },
+        )
+    )
+    return TrustSourceVerifyResponse(ok=True, result=result)
 
 
 @app.post("/api/verifications", response_model=VerificationResponse)

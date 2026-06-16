@@ -105,7 +105,18 @@ class ShortlistResponse(BaseModel):
     created_at: datetime
 
 
-ActionType = Literal["note", "override", "shortlist", "review", "scenario"]
+ActionType = Literal["note", "override", "shortlist", "review", "scenario", "source_verification"]
+
+
+class TrustSourceVerifyRequest(BaseModel):
+    unique_id: str
+    procedure: str
+    mode: Literal["crawl", "agent"] = "crawl"
+
+
+class TrustSourceVerifyResponse(BaseModel):
+    ok: bool
+    result: dict[str, Any]
 
 
 class UserActionRequest(BaseModel):
