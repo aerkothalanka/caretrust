@@ -88,3 +88,9 @@ body{background:linear-gradient(135deg,#F8FAFC 0%,#FFF7ED 100%);color:#0F172A}
 .trustReviewFacilityFilter{display:flex!important;justify-content:center!important;align-items:center!important;text-align:left!important}
 .trustReviewFacilityFilter .facilitySelectLabel{width:min(620px,100%)!important;max-width:620px!important;margin:0 auto!important}
 .chatAssistantAccentLine{margin:-4px 0 18px!important}
+
+/* Top-right language selector */
+.languageSelect{display:inline-flex;align-items:center;gap:6px;border:1px solid #E2E8F0;background:#fff;border-radius:999px;padding:5px 7px;color:#0F172A;font-weight:900;box-shadow:0 6px 16px rgba(15,23,42,.06)}
+.languageSelect span{font-size:11px;color:#334155;white-space:nowrap}
+.languageSelect select{width:auto;min-width:98px;height:30px;border:0;background:#FFF7ED;border-radius:999px;padding:4px 26px 4px 10px;color:#0F172A;font-size:12px;font-weight:950}
+@media(max-width:760px){.languageSelect span{display:none}.languageSelect select{min-width:86px}.callTop{flex-wrap:wrap}}
