@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -13,9 +13,13 @@ from .data import APP_SCHEMA, FACILITIES_TABLE, NFHS_TABLE, PINCODE_TABLE, DataS
 from .models import (
     AssistantQuery,
     AssistantResponse,
+    ScenarioShortlistRequest,
+    ScenarioShortlistResponse,
     ShortlistRequest,
     ShortlistResponse,
     TrustCard,
+    UserActionRequest,
+    UserActionResponse,
     VerificationRequest,
     VerificationResponse,
     VoiceRequest,
@@ -37,6 +41,19 @@ app.add_middleware(
 
 store = DataStore()
 STATIC_DIR = Path(__file__).resolve().parents[1] / "static"
+
+
+@app.middleware("http")
+async def no_store_frontend_cache(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.startswith("/assets/") or path.startswith("/static/") or path.endswith(".html"):
+        response.headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
     assets_dir = STATIC_DIR / "assets"
@@ -81,7 +98,8 @@ def top_facilities(
 
 
 @app.get("/api/filters")
-def filters() -> dict[str, object]:
+def filters(response: Response) -> dict[str, object]:
+    response.headers["Cache-Control"] = "no-store, max-age=0"
     return store.filter_options()
 
 
@@ -145,6 +163,31 @@ def shortlists(request: ShortlistRequest) -> ShortlistResponse:
 @app.get("/api/shortlists/recent")
 def recent_shortlists(limit: int = Query(20, ge=1, le=100)) -> list[dict[str, object]]:
     return store.recent_shortlists(limit)
+
+
+@app.post("/api/actions", response_model=UserActionResponse)
+def user_actions(request: UserActionRequest) -> UserActionResponse:
+    action = store.add_user_action(request)
+    return UserActionResponse(ok=True, action_id=action["action_id"], action=action)
+
+
+@app.get("/api/actions/recent")
+def recent_user_actions(
+    limit: int = Query(50, ge=1, le=200),
+    facility_id: str | None = Query(None),
+) -> list[dict[str, object]]:
+    return store.recent_user_actions(limit, facility_id=facility_id)
+
+
+@app.post("/api/scenario-shortlists", response_model=ScenarioShortlistResponse)
+def scenario_shortlists(request: ScenarioShortlistRequest) -> ScenarioShortlistResponse:
+    record = store.save_scenario_shortlist(request)
+    return ScenarioShortlistResponse(ok=True, shortlist_id=record["shortlist_id"], shortlist=record)
+
+
+@app.get("/api/scenario-shortlists/recent")
+def recent_scenario_shortlists(limit: int = Query(20, ge=1, le=100)) -> list[dict[str, object]]:
+    return store.recent_scenario_shortlists(limit)
 
 
 @app.post("/api/assistant/query", response_model=AssistantResponse)

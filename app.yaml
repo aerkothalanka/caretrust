@@ -20,3 +20,11 @@ env:
     value: "gemini-3.1-flash-live-preview"
   - name: GEMINI_LIVE_VOICE
     value: "Puck"
+  - name: CARESIGNAL_LAKEBASE_ENDPOINT
+    value: "projects/hackathon-demo/branches/production/endpoints/primary"
+  - name: PGHOST
+    value: "ep-sweet-hill-d8yapkbw.database.us-east-2.cloud.databricks.com"
+  - name: PGDATABASE
+    value: "publicdata"
+  - name: PGUSER
+    value: "788bd6cb-634c-462f-94f1-7d81a436be59"

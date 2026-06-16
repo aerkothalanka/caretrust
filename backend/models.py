@@ -105,6 +105,37 @@ class ShortlistResponse(BaseModel):
     created_at: datetime
 
 
+ActionType = Literal["note", "override", "shortlist", "review", "scenario"]
+
+
+class UserActionRequest(BaseModel):
+    user_id: str | None = "demo-user"
+    facility_id: str | None = None
+    action_type: ActionType
+    action_data: dict[str, Any] = Field(default_factory=dict)
+
+
+class UserActionResponse(BaseModel):
+    ok: bool
+    action_id: str
+    action: dict[str, Any]
+
+
+class ScenarioShortlistRequest(BaseModel):
+    user_id: str | None = "demo-user"
+    location: str | None = None
+    service: str
+    facility_ids: list[str] = Field(default_factory=list)
+    title: str | None = None
+    notes: str | None = None
+
+
+class ScenarioShortlistResponse(BaseModel):
+    ok: bool
+    shortlist_id: str
+    shortlist: dict[str, Any]
+
+
 class AssistantQuery(BaseModel):
     question: str = Field(..., min_length=1)
     procedure: str | None = None

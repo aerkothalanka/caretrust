@@ -6,11 +6,12 @@ import uuid
 import json
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from urllib import request as urllib_request
 from urllib.error import URLError
 
-from .models import Facility, ShortlistRequest, VerificationRequest, VoiceRequest
+from .models import Facility, ScenarioShortlistRequest, ShortlistRequest, UserActionRequest, VerificationRequest, VoiceRequest
 from .scoring import PROCEDURES
 
 
@@ -18,6 +19,50 @@ APP_SCHEMA = "lakebase_hackathon_demo.public"
 FACILITIES_TABLE = f"{APP_SCHEMA}.facilities_gold_sync"
 PINCODE_TABLE = f"{APP_SCHEMA}.india_post_pincode_directory_gold_sync"
 NFHS_TABLE = "databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.nfhs_5_district_health_indicators"
+LAKEBASE_PG_ENDPOINT = os.getenv("CARESIGNAL_LAKEBASE_ENDPOINT", "projects/hackathon-demo/branches/production/endpoints/primary")
+LAKEBASE_PG_HOST = os.getenv("PGHOST", "ep-sweet-hill-d8yapkbw.database.us-east-2.cloud.databricks.com")
+LAKEBASE_PG_DATABASE = os.getenv("PGDATABASE", "publicdata")
+LAKEBASE_PG_USER = os.getenv("PGUSER", "788bd6cb-634c-462f-94f1-7d81a436be59")
+_LAKEBASE_TOKEN_CACHE: dict[str, Any] = {}
+INDIA_STATES_AND_UTS = [
+    "Andaman and Nicobar Islands",
+    "Andhra Pradesh",
+    "Arunachal Pradesh",
+    "Assam",
+    "Bihar",
+    "Chandigarh",
+    "Chhattisgarh",
+    "Dadra and Nagar Haveli and Daman and Diu",
+    "Delhi",
+    "Goa",
+    "Gujarat",
+    "Haryana",
+    "Himachal Pradesh",
+    "Jammu and Kashmir",
+    "Jharkhand",
+    "Karnataka",
+    "Kerala",
+    "Ladakh",
+    "Lakshadweep",
+    "Madhya Pradesh",
+    "Maharashtra",
+    "Manipur",
+    "Meghalaya",
+    "Mizoram",
+    "Nagaland",
+    "Odisha",
+    "Puducherry",
+    "Punjab",
+    "Rajasthan",
+    "Sikkim",
+    "Tamil Nadu",
+    "Telangana",
+    "Tripura",
+    "Uttar Pradesh",
+    "Uttarakhand",
+    "West Bengal",
+]
+
 FACILITY_QUERY_COLUMNS = [
     "sync_pk",
     "unique_id",
@@ -58,8 +103,11 @@ class DataStore:
     def __init__(self) -> None:
         self._facilities: list[Facility] | None = None
         self._pincode_locations: list[dict[str, Any]] | None = None
+        self._location_filter_rows: list[dict[str, Any]] | None = None
         self._verifications: list[dict[str, Any]] = []
         self._shortlists: list[dict[str, Any]] = []
+        self._user_actions: list[dict[str, Any]] = []
+        self._scenario_shortlists: list[dict[str, Any]] = []
         self._voice_sessions: dict[str, dict[str, Any]] = {}
         self._voice_turns: list[dict[str, Any]] = []
         self.last_source = "not_loaded"
@@ -82,16 +130,29 @@ class DataStore:
 
 
     def filter_options(self) -> dict[str, list[dict[str, str]]]:
-        facilities = self.list_facilities()
-        locations = self.location_dimensions()
+        # Keep filters fast and complete: use the bundled cache first instead of blocking dropdowns on live Lakebase queries.
+        cache = _load_location_filter_cache()
+        location_filter_rows = cache.get("state_cities") or self.location_filter_rows()
+        cached_pincodes = cache.get("pincodes") or []
+        locations = [] if cached_pincodes else self.location_dimensions()
+
         def options(values):
-            cleaned = sorted({str(v).strip() for v in values if v})
+            cleaned = sorted({_clean_location_label(v) for v in values if _clean_location_label(v)})
             return [{"value": value, "label": value} for value in cleaned]
+
+        state_values = list(INDIA_STATES_AND_UTS) + list(cache.get("states") or []) + [row.get("state") for row in location_filter_rows] + [row.get("state") for row in locations]
+        city_values = [row.get("city") for row in location_filter_rows] or [row.get("city") for row in locations]
+        state_city_pairs = [
+            {"state": _clean_location_label(row["state"]), "city": _clean_location_label(row["city"])}
+            for row in location_filter_rows
+            if row.get("state") and row.get("city")
+        ]
         return {
-            "countries": options([row.get("country") for row in locations] + [f.country or "India" for f in facilities]) or [{"value": "India", "label": "India"}],
-            "states": options([row.get("state") for row in locations] + [f.state for f in facilities]),
-            "cities": options([row.get("city") for row in locations] + [f.city for f in facilities]),
-            "pincodes": options([row.get("postal_code") for row in locations] + [f.pincode for f in facilities]),
+            "countries": [{"value": "India", "label": "India"}],
+            "states": options(state_values),
+            "cities": options(city_values),
+            "state_cities": state_city_pairs,
+            "pincodes": options(cached_pincodes or [row.get("postal_code") for row in locations]),
             "services": self.service_groupings(),
             "age_groups": [
                 {"value": "all", "label": "All age groups"},
@@ -100,6 +161,11 @@ class DataStore:
                 {"value": "senior", "label": "Seniors"},
             ],
         }
+
+    def location_filter_rows(self) -> list[dict[str, Any]]:
+        if self._location_filter_rows is None:
+            self._location_filter_rows = _load_location_filter_rows()
+        return self._location_filter_rows
 
     def service_groupings(self) -> list[dict[str, str]]:
         return [
@@ -164,6 +230,14 @@ class DataStore:
                 "created_at": record["created_at"],
             },
         )
+        self.add_user_action(
+            UserActionRequest(
+                user_id=request.verifier_name or "demo-user",
+                facility_id=request.unique_id,
+                action_type="review",
+                action_data={"procedure": request.procedure, "status": request.status, "notes": request.notes, "evidence_url": request.evidence_url},
+            )
+        )
         return record
 
     def add_shortlist(self, request: ShortlistRequest) -> dict[str, Any]:
@@ -177,7 +251,97 @@ class DataStore:
         }
         self._shortlists.append(record)
         self._insert_lakebase("planner_shortlists", record)
+        self.add_user_action(
+            UserActionRequest(
+                user_id=request.planner_name or "demo-user",
+                facility_id=request.unique_id,
+                action_type="shortlist",
+                action_data={"procedure": request.procedure, "notes": request.notes},
+            )
+        )
         return record
+
+    def add_user_action(self, request: UserActionRequest) -> dict[str, Any]:
+        now = _now_iso()
+        record = {
+            "action_id": str(uuid.uuid4()),
+            "user_id": request.user_id or "demo-user",
+            "facility_id": request.facility_id,
+            "action_type": request.action_type,
+            "action_data": request.action_data or {},
+            "created_at": now,
+            "updated_at": now,
+        }
+        self._user_actions.append(record)
+        self._insert_lakebase(
+            "user_actions",
+            record,
+        )
+        return record
+
+    def recent_user_actions(self, limit: int = 50, facility_id: str | None = None) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        if facility_id:
+            rows = self._select_lakebase(
+                "SELECT action_id, user_id, facility_id, action_type, action_data, created_at, updated_at FROM public.user_actions WHERE facility_id = %s ORDER BY created_at DESC LIMIT %s",
+                [facility_id, limit],
+            )
+        else:
+            rows = self._select_lakebase(
+                "SELECT action_id, user_id, facility_id, action_type, action_data, created_at, updated_at FROM public.user_actions ORDER BY created_at DESC LIMIT %s",
+                [limit],
+            )
+        if not rows:
+            rows = [row for row in reversed(self._user_actions) if not facility_id or row.get("facility_id") == facility_id][:limit]
+        return [self._normalize_action_record(row) for row in rows[:limit]]
+
+    def save_scenario_shortlist(self, request: ScenarioShortlistRequest) -> dict[str, Any]:
+        now = _now_iso()
+        location = request.location or "India"
+        record = {
+            "shortlist_id": str(uuid.uuid4()),
+            "user_id": request.user_id or "demo-user",
+            "location": location,
+            "service": request.service,
+            "facility_ids": request.facility_ids,
+            "created_at": now,
+            "title": request.title,
+            "notes": request.notes,
+        }
+        self._scenario_shortlists.append(record)
+        self._insert_lakebase(
+            "shortlists",
+            {
+                "shortlist_id": record["shortlist_id"],
+                "user_id": record["user_id"],
+                "location": record["location"],
+                "service": record["service"],
+                "facility_ids": record["facility_ids"],
+                "created_at": record["created_at"],
+            },
+        )
+        self.add_user_action(
+            UserActionRequest(
+                user_id=record["user_id"],
+                facility_id=request.facility_ids[0] if request.facility_ids else None,
+                action_type="scenario",
+                action_data={
+                    "title": request.title,
+                    "notes": request.notes,
+                    "location": location,
+                    "service": request.service,
+                    "facility_ids": request.facility_ids,
+                },
+            )
+        )
+        return record
+
+    def recent_scenario_shortlists(self, limit: int = 20) -> list[dict[str, Any]]:
+        rows = self._select_lakebase(
+            "SELECT shortlist_id, user_id, location, service, facility_ids, created_at FROM public.shortlists ORDER BY created_at DESC LIMIT %s",
+            [limit],
+        ) or list(reversed(self._scenario_shortlists[-limit:]))
+        return [self._normalize_shortlist_record(row) for row in rows[:limit]]
 
     def recent_shortlists(self, limit: int = 20) -> list[dict[str, Any]]:
         rows = self._select_lakebase(
@@ -289,22 +453,43 @@ class DataStore:
             record["created_at"] = record["created_at"].isoformat()
         return record
 
+    def _normalize_action_record(self, row: dict[str, Any]) -> dict[str, Any]:
+        record = dict(row)
+        action_data = record.get("action_data")
+        if isinstance(action_data, str):
+            try:
+                record["action_data"] = json.loads(action_data)
+            except json.JSONDecodeError:
+                record["action_data"] = {"value": action_data}
+        elif action_data is None:
+            record["action_data"] = {}
+        for key in ["created_at", "updated_at"]:
+            if isinstance(record.get(key), datetime):
+                record[key] = record[key].isoformat()
+        return record
+
+    def _normalize_shortlist_record(self, row: dict[str, Any]) -> dict[str, Any]:
+        record = dict(row)
+        facility_ids = record.get("facility_ids")
+        if isinstance(facility_ids, str):
+            text = facility_ids.strip("{}")
+            record["facility_ids"] = [item for item in text.split(",") if item]
+        elif facility_ids is None:
+            record["facility_ids"] = []
+        else:
+            record["facility_ids"] = list(facility_ids)
+        if isinstance(record.get("created_at"), datetime):
+            record["created_at"] = record["created_at"].isoformat()
+        return record
+
     def _select_lakebase(self, sql: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
-        if not all(os.getenv(name) for name in ["PGHOST", "PGDATABASE", "PGUSER", "PGPASSWORD"]):
-            return []
         try:
-            import psycopg2
+            conn = _connect_lakebase()
         except Exception:
             return []
+        if conn is None:
+            return []
         try:
-            conn = psycopg2.connect(
-                host=os.getenv("PGHOST"),
-                database=os.getenv("PGDATABASE"),
-                user=os.getenv("PGUSER"),
-                password=os.getenv("PGPASSWORD"),
-                port=os.getenv("PGPORT", "5432"),
-                sslmode=os.getenv("PGSSLMODE", "require"),
-            )
             with conn:
                 with conn.cursor() as cursor:
                     cursor.execute(sql, params or [])
@@ -313,35 +498,174 @@ class DataStore:
             conn.close()
             return rows
         except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
             return []
 
-    def _insert_lakebase(self, table: str, values: dict[str, Any]) -> None:
-        if not all(os.getenv(name) for name in ["PGHOST", "PGDATABASE", "PGUSER", "PGPASSWORD"]):
-            return
+    def _insert_lakebase(self, table: str, values: dict[str, Any]) -> bool:
         try:
-            import psycopg2
+            conn = _connect_lakebase()
         except Exception:
-            return
+            return False
+        if conn is None:
+            return False
         columns = list(values)
         placeholders = ", ".join(["%s"] * len(columns))
         column_sql = ", ".join(columns)
         sql = f"INSERT INTO public.{table} ({column_sql}) VALUES ({placeholders})"
         try:
-            conn = psycopg2.connect(
-                host=os.getenv("PGHOST"),
-                database=os.getenv("PGDATABASE"),
-                user=os.getenv("PGUSER"),
-                password=os.getenv("PGPASSWORD"),
-                port=os.getenv("PGPORT", "5432"),
-                sslmode=os.getenv("PGSSLMODE", "require"),
-            )
+            from psycopg2.extras import Json
+
+            encoded_values = [Json(values[column]) if isinstance(values[column], dict) else values[column] for column in columns]
             with conn:
                 with conn.cursor() as cursor:
-                    cursor.execute(sql, [values[column] for column in columns])
+                    cursor.execute(sql, encoded_values)
             conn.close()
+            return True
         except Exception:
-            return
+            try:
+                conn.close()
+            except Exception:
+                pass
+            return False
 
+
+
+def _lakebase_password() -> str | None:
+    password = os.getenv("PGPASSWORD")
+    if password:
+        return password
+    now = time.time()
+    cached_token = _LAKEBASE_TOKEN_CACHE.get("token")
+    cached_expiry = float(_LAKEBASE_TOKEN_CACHE.get("expires_at", 0) or 0)
+    if cached_token and cached_expiry - now > 300:
+        return str(cached_token)
+    try:
+        from databricks.sdk import WorkspaceClient
+
+        credential = WorkspaceClient().postgres.generate_database_credential(LAKEBASE_PG_ENDPOINT)
+        token = getattr(credential, "token", None)
+        expire_time = getattr(credential, "expire_time", None)
+        expires_at = now + 3300
+        if expire_time:
+            try:
+                expires_at = datetime.fromisoformat(str(expire_time).replace("Z", "+00:00")).timestamp()
+            except ValueError:
+                pass
+        if token:
+            _LAKEBASE_TOKEN_CACHE.update({"token": token, "expires_at": expires_at})
+            return str(token)
+    except Exception:
+        return None
+    return None
+
+
+def _connect_lakebase():
+    password = _lakebase_password()
+    if not password:
+        return None
+    try:
+        import psycopg2
+
+        return psycopg2.connect(
+            host=LAKEBASE_PG_HOST,
+            database=LAKEBASE_PG_DATABASE,
+            user=LAKEBASE_PG_USER,
+            password=password,
+            port=os.getenv("PGPORT", "5432"),
+            sslmode=os.getenv("PGSSLMODE", "require"),
+        )
+    except Exception:
+        return None
+
+
+def _location_label_key(value: str) -> str:
+    return "".join(ch for ch in value.lower() if ch.isalnum())
+
+
+_CANONICAL_STATE_BY_KEY = {_location_label_key(state): state for state in INDIA_STATES_AND_UTS}
+_LOCATION_CACHE: dict[str, Any] | None = None
+
+
+def _load_location_filter_cache() -> dict[str, Any]:
+    global _LOCATION_CACHE
+    if _LOCATION_CACHE is not None:
+        return _LOCATION_CACHE
+    cache_path = Path(__file__).with_name("location_cache.json")
+    try:
+        data = json.loads(cache_path.read_text())
+    except Exception:
+        data = {}
+    state_cities = data.get("state_cities") if isinstance(data, dict) else []
+    states = data.get("states") if isinstance(data, dict) else []
+    pincodes = data.get("pincodes") if isinstance(data, dict) else []
+    _LOCATION_CACHE = {
+        "states": states if isinstance(states, list) else [],
+        "state_cities": state_cities if isinstance(state_cities, list) else [],
+        "pincodes": pincodes if isinstance(pincodes, list) else [],
+    }
+    return _LOCATION_CACHE
+
+
+def _clean_location_label(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if text.lower() in {"na", "n/a", "none", "null", "nan"}:
+        return ""
+    text = re.sub(r"\s+", " ", text)
+    return _CANONICAL_STATE_BY_KEY.get(_location_label_key(text), text)
+
+
+def _load_location_filter_rows() -> list[dict[str, Any]]:
+    query = f"""
+        WITH official_states AS (
+          SELECT DISTINCT statename AS state
+          FROM {PINCODE_TABLE}
+          WHERE pincode IS NOT NULL
+            AND statename IS NOT NULL
+            AND lower(trim(statename)) NOT IN ('', 'na', 'n/a', 'none', 'null')
+        ), location_pairs AS (
+          SELECT statename AS state, district AS city
+          FROM {PINCODE_TABLE}
+          WHERE pincode IS NOT NULL
+            AND statename IS NOT NULL
+            AND district IS NOT NULL
+            AND lower(trim(statename)) NOT IN ('', 'na', 'n/a', 'none', 'null')
+            AND lower(trim(district)) NOT IN ('', 'na', 'n/a', 'none', 'null')
+          UNION
+          SELECT address_stateOrRegion AS state, address_city AS city
+          FROM {FACILITIES_TABLE}
+          WHERE address_stateOrRegion IN (SELECT state FROM official_states)
+            AND address_city IS NOT NULL
+            AND lower(trim(address_city)) NOT IN ('', 'na', 'n/a', 'none', 'null')
+        )
+        SELECT DISTINCT
+          'India' AS country,
+          state,
+          city
+        FROM location_pairs
+        ORDER BY state, city
+    """
+    try:
+        rows = _load_query_rows(query)
+    except Exception:
+        return []
+    cleaned: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for row in rows:
+        state = _clean_location_label(row.get("state"))
+        city = _clean_location_label(row.get("city"))
+        if not state or not city:
+            continue
+        key = (state, city)
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append({"country": "India", "state": state, "city": city})
+    return cleaned
 
 
 def _load_pincode_locations() -> list[dict[str, Any]]:
@@ -357,7 +681,12 @@ def _load_pincode_locations() -> list[dict[str, Any]]:
           COUNT(*) AS facility_count
         FROM {PINCODE_TABLE}
         WHERE pincode IS NOT NULL
+          AND statename IS NOT NULL
+          AND district IS NOT NULL
+          AND lower(trim(statename)) NOT IN ('', 'na', 'n/a', 'none', 'null')
+          AND lower(trim(district)) NOT IN ('', 'na', 'n/a', 'none', 'null')
         GROUP BY statename, district, pincode, latitude, longitude
+        ORDER BY state, city, postal_code
         LIMIT {limit}
     """
     try:

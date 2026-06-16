@@ -19,12 +19,14 @@ body{background:linear-gradient(135deg,#f9f7f4 0%,#fff4f0 100%)}
 .filterCard span,.kpiCard small{color:#000!important}.kpiCard:before{background:#ff7a45!important}.kpiCard{border-color:#d1d5db;box-shadow:0 14px 34px rgba(0,0,0,.08)}
 .trustPills span{color:#000!important}
 
-/* Header placement: keep Chat Assistant pulled to the right side of the nav */
-.tabs{flex:1}.tabs button.assistantTab{margin-left:auto}
+/* Header placement: keep all navigation tabs grouped on the right side */
+.tabs{flex:1;justify-content:flex-end}.tabs button.assistantTab{margin-left:0}
 .chartAssistant .assistantActions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.chartAssistant .voiceSampleBtn{background:#fff1ed;color:#b7281a}
+.successMessage{margin:8px 0 4px;border:1px solid #bbf7d0;background:#f0fdf4;color:#166534;border-radius:12px;padding:9px 11px;font-weight:900}
+.missionStrip{margin:-10px 0 14px;padding:10px 14px;border:1px solid #FED7AA;background:#FFF7ED;color:#0F172A;border-radius:16px;font-size:13px;font-weight:900;letter-spacing:.01em;box-shadow:0 10px 24px rgba(15,23,42,.05)}
 
 /* Demo-readiness additions */
-.filterCard{grid-template-columns:repeat(7,minmax(0,1fr))}
+.filterCard{grid-template-columns:repeat(6,minmax(0,1fr))}
 .methodLink{margin-left:auto;border-radius:999px;background:#fff1ed;color:#b7281a;padding:7px 10px;font-weight:950}.methodologySheet{position:relative;width:min(620px,94vw);padding:30px;border-radius:28px;background:#fff;box-shadow:0 34px 90px rgba(2,6,23,.28)}.methodologySheet h2{margin:6px 54px 12px 0;font-size:28px;letter-spacing:-.04em}.methodologySheet ul{display:grid;gap:10px;margin:0 0 14px;padding-left:20px}.methodologySheet li{color:#334155}.eyebrow.dark{color:#b7281a}.promptChips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.promptChips button{border-radius:999px;background:#fff1ed;color:#b7281a;padding:7px 10px;font-size:12px;font-weight:900}.voiceStatus{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0 10px}.voiceStatus .dot{width:9px;height:9px;border-radius:999px;background:#16a34a;padding:0;box-shadow:0 0 0 4px rgba(22,163,74,.12)}.voiceStatus span,.voiceStatus small{display:inline-flex;align-items:center;border-radius:999px;background:#fff1ed;color:#b7281a;font-size:11px;font-weight:900;padding:5px 8px}.voiceCallBtn{display:inline-flex;align-items:center;border-radius:999px;background:#ff3621;color:#fff;text-decoration:none;padding:10px 12px;font-weight:950}.historyCard{min-height:220px}.historyList{display:grid;gap:9px}.historyItem{display:grid;gap:3px;border:1px solid #ffd1c8;background:#fff8f5;border-radius:16px;padding:10px}.historyItem span{color:#334155}.historyItem small{color:#64748b}.shortlistInline{background:#1b3139}
 @media (max-width:1100px){.filterCard{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
@@ -37,4 +39,16 @@ body{background:linear-gradient(135deg,#f9f7f4 0%,#fff4f0 100%)}
 .scoreBubble{box-shadow:0 0 0 5px rgba(255,54,33,.16),inset 0 1px 0 rgba(255,255,255,.22),0 16px 34px rgba(15,23,42,.18)!important}
 .trustOpenBtn{min-width:62px;justify-content:center}.headerContext{display:inline-flex;align-items:center;max-width:220px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid #e2e8f0;background:#fff;color:#334155;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:850;box-shadow:0 6px 16px rgba(15,23,42,.06)}
 @media (max-width:860px){.headerContext{display:none}.tabs button.assistantTab{border-left:0;padding-left:10px}}
+
+/* CareSignal Navy/Coral theme override */
+:root{--ink:#0F172A;--green:#F97316;--green2:#F97316;--mint:#FFF7ED;--amber:#F97316;--red:#F97316}
+body{background:linear-gradient(135deg,#F8FAFC 0%,#FFF7ED 100%);color:#0F172A}
+.brand,.tabs button.active,.trustClose:hover,.shortlistInline{background-color:#0F172A;color:#fff}.brand{background:transparent;color:#0F172A}.brand span{color:#F97316!important}
+.cardTitle h2,.filterCard span,.kpiCard small,.chipGroup span,.trustSection h3,.trustPillGroup h3,.methodologySheet h2,.eyebrow.dark{color:#0F172A!important}
+.callTop a,.callTop button,.methodLink,.promptChips button,.chartAssistant .voiceSampleBtn,.voiceStatus span,.voiceStatus small{background:#FFF7ED!important;color:#0F172A!important}
+.tabs button.active,.trustOpenBtn,.trustOpenWide,.voiceCallBtn,.pin.active{background:#F97316!important;color:#fff!important;box-shadow:0 8px 18px rgba(249,115,22,.18)!important}
+.hero>div:first-child,.score,.scoreBubble,.trustHero{background:linear-gradient(135deg,#0F172A,#F97316)!important}
+.kpiCard:before,.filterCard:before{background:#F97316!important}.rank tr.selected td:first-child{border-left-color:#F97316!important}
+.rank tbody tr:hover td,.rank tr.selected td{background:#FFF7ED!important;border-color:#FED7AA!important}.trustPills span,.chipGroup i,.badge.hi{background:#FFF7ED!important;border-color:#FED7AA!important;color:#0F172A!important}
+.bars i{background:linear-gradient(90deg,#0F172A,#F97316)!important}.trustSheet .sources a{color:#F97316!important}.historyItem{border-color:#FED7AA;background:#FFF7ED}
 

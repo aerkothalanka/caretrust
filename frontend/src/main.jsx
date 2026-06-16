@@ -19,7 +19,7 @@ const TABS = [
   { id: 'explorer', label: 'Facility Explorer' },
   { id: 'map', label: 'Geo Search' },
   { id: 'verification', label: 'Trust Review' },
-  { id: 'assistant', label: 'Chat Assistant' },
+  { id: 'assistant', label: 'Chart Assistant' },
 ];
 
 const fallbackFacilities = [
@@ -98,15 +98,11 @@ function distanceKm(a, b) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-function hasUncertainty(f) {
-  const flags = (f.uncertainty_flags || []).join(' ').toLowerCase();
-  return flags.includes('sparse') || flags.includes('verify') || flags.includes('no direct') || flags.includes('no source') || displayConfidence(f).toLowerCase().includes('review') || !f.phone || !f.website;
-}
 
 function AppHeader({ activeTab, setActiveTab, selected }) {
   return <header className="topbar">
     <div className="brandNav">
-      <div className="brandBlock"><div className="brand">Care<span>Signal</span></div><div className="brandSub">Facility Trust Desk</div></div>
+      <div className="brandBlock"><div className="brand">Care<span>Signal</span></div><div className="brandSub">Facilities Trusted Desk - Trusted Starts here</div></div>
       <nav className="tabs" aria-label="Main sections">{TABS.map((tab) => <button key={tab.id} className={`${activeTab === tab.id ? 'active' : ''} ${tab.id === 'assistant' ? 'assistantTab' : ''}`.trim()} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav>
     </div>
     <div className="callTop"><b>Digital call assistant</b>{selected?.name && <span className="headerContext" title={selected.name}>{selected.name}</span>}<a href={`tel:${PHONE_TEL}`}>Call {PHONE_DISPLAY}</a></div>
@@ -115,20 +111,22 @@ function AppHeader({ activeTab, setActiveTab, selected }) {
 
 function FilterBar({ filters, values, setters, services }) {
   const opts = (items, allLabel) => [{ value: '', label: allLabel }, ...(items || [])];
+  const citiesForState = values.state && Array.isArray(filters.state_cities)
+    ? Array.from(new Set(filters.state_cities.filter((row) => row.state === values.state).map((row) => row.city).filter(Boolean))).sort().map((city) => ({ value: city, label: city }))
+    : filters.cities;
   return <section className="filterCard">
     <label><span>Country</span><select value={values.country} onChange={(e) => setters.setCountry(e.target.value)}>{opts(filters.countries, 'All countries').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
-    <label><span>State / region</span><select value={values.state} onChange={(e) => setters.setState(e.target.value)}>{opts(filters.states, 'All states').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
-    <label><span>City</span><select value={values.city} onChange={(e) => setters.setCity(e.target.value)}>{opts(filters.cities, 'All cities').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
+    <label><span>State / region</span><select value={values.state} onChange={(e) => { setters.setState(e.target.value); setters.setCity(''); setters.setPincode(''); }}>{opts(filters.states, 'All states').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
+    <label><span>City</span><select value={values.city} onChange={(e) => { setters.setCity(e.target.value); setters.setPincode(''); }}>{opts(citiesForState, values.state ? 'All cities in state' : 'All cities').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
     <label><span>Postal code</span><select value={values.pincode} onChange={(e) => setters.setPincode(e.target.value)}>{opts(filters.pincodes, 'All postal codes').map((o) => <option key={o.value || o.label} value={o.value}>{o.label}</option>)}</select></label>
     <label><span>Service</span><select value={values.service} onChange={(e) => setters.setService(e.target.value)}>{services.map((s) => <option key={s.service_id} value={s.service_id}>{s.service_label}</option>)}</select></label>
-    <label><span>Focus</span><select value={values.evidenceFocus} onChange={(e) => setters.setEvidenceFocus(e.target.value)}><option value="all">All claims</option><option value="uncertain">Needs verification</option></select></label>
     <label><span>Radius</span><select value={values.radius} onChange={(e) => setters.setRadius(Number(e.target.value))}>{[25, 50, 100, 250, 500, 750].map((km) => <option key={km} value={km}>{km} km</option>)}</select></label>
   </section>;
 }
 
 function FacilityTable({ facilities, selected, setSelected, onOpenTrust }) {
   const choose = (f) => { setSelected(f); onOpenTrust(f); };
-  return <section className="card rankings"><div className="cardTitle"><h2>Ranked facilities</h2><span>Click View for evidence and score details</span></div><table className="rank"><thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Score</th><th>Status</th><th>Trust</th></tr></thead><tbody>{facilities.map((f, i) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => choose(f)}><td>{i + 1}</td><td><b>{f.name}</b></td><td>{[f.city, f.state, f.pincode].filter(Boolean).join(', ')}</td><td><b>{fmt(f.score)}</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{displayConfidence(f)}</span></td><td><button className="trustOpenBtn" onClick={(e) => { e.stopPropagation(); choose(f); }}>View</button></td></tr>)}</tbody></table>{!facilities.length && <p className="empty">No facilities match these filters. Try All claims, All states, or a different service.</p>}</section>;
+  return <section className="card rankings"><div className="cardTitle"><h2>Ranked facilities</h2><span>Click View for evidence and score details</span></div><table className="rank"><thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Score</th><th>Status</th><th>Trust</th></tr></thead><tbody>{facilities.map((f, i) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => choose(f)}><td>{i + 1}</td><td><b>{f.name}</b></td><td>{[f.city, f.state, f.pincode].filter(Boolean).join(', ')}</td><td><b>{fmt(f.score)}</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{displayConfidence(f)}</span></td><td><button className="trustOpenBtn" onClick={(e) => { e.stopPropagation(); choose(f); }}>View</button></td></tr>)}</tbody></table>{!facilities.length && <p className="empty">No facilities match these filters. Try all states or a different service.</p>}</section>;
 }
 
 function TrustCard({ facility, serviceLabel, onClose, onMethodology }) {
@@ -164,19 +162,32 @@ function RadiusMap({ facilities, selected, setSelected, radius, setRadius, onOpe
 }
 
 function RecentHistory({ title, items, empty }) {
-  return <section className="card historyCard"><div className="cardTitle"><h2>{title}</h2><span>Read back from app state</span></div><div className="historyList">{items.slice(0, 6).map((item) => <div key={item.verification_id || item.shortlist_id || item.created_at} className="historyItem"><b>{item.facility_name || item.facility_unique_id || item.unique_id}</b><span>{humanizeTerm(item.status || item.verification_status || item.procedure)} • {item.notes || item.call_summary || 'No notes'}</span><small>{item.created_at || ''}</small></div>)}{!items.length && <p className="empty">{empty}</p>}</div></section>;
+  return <section className="card historyCard"><div className="cardTitle"><h2>{title}</h2><span>Read back from Lakebase</span></div><div className="historyList">{items.slice(0, 6).map((item) => { const data = item.action_data || {}; const label = item.action_type || item.status || item.verification_status || item.procedure || item.service; const detail = data.note || data.justification || data.notes || data.title || data.status || item.notes || item.location || 'Saved'; return <div key={item.action_id || item.verification_id || item.shortlist_id || item.created_at} className="historyItem"><b>{item.facility_name || item.facility_unique_id || item.facility_id || item.title || item.unique_id || item.location || 'Scenario'}</b><span>{humanizeTerm(label)} • {detail}</span><small>{item.created_at || ''}</small></div>; })}{!items.length && <p className="empty">{empty}</p>}</div></section>;
 }
 
-function VerificationForm({ facility, service, serviceLabel, onVerified }) {
+function VerificationForm({ facility, service, serviceLabel, facilities, location, onVerified, onHistory }) {
   const [status, setStatus] = useState('verified');
   const [notes, setNotes] = useState('Verified by phone or visit.');
+  const [overrideScore, setOverrideScore] = useState('');
+  const [overrideReason, setOverrideReason] = useState('Local contact confirmed service capacity.');
+  const [scenarioTitle, setScenarioTitle] = useState('');
+  const [submitMessage, setSubmitMessage] = useState('');
   if (!facility) return null;
+  const saveAction = async (action_type, action_data = {}) => {
+    await api('/api/actions', { method: 'POST', body: JSON.stringify({ user_id: 'CareSignal demo user', facility_id: facility.unique_id, action_type, action_data: { procedure: service, facility_name: facility.name, ...action_data } }) });
+    await onHistory?.();
+  };
   const submit = async () => {
+    setSubmitMessage('');
     const payload = { unique_id: facility.unique_id, procedure: service, status, verifier_name: 'CareSignal demo user', notes };
     try { const result = await api('/api/verifications', { method: 'POST', body: JSON.stringify(payload) }); onVerified(status, result.facility); }
     catch (_) { onVerified(status); }
+    setSubmitMessage('Review has been submitted.');
+    await onHistory?.();
   };
-  return <section className="card verification"><div className="cardTitle"><h2>Human verification</h2><span>{facility.name}</span></div><p>Call or visit the facility, verify {serviceLabel}, then feed confirmed facts back into ranking.</p><div className="checklist"><label><input type="checkbox" /> Service currently available</label><label><input type="checkbox" /> Equipment/facilities confirmed</label><label><input type="checkbox" /> Specialists/referral pathway confirmed</label></div><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="verified">Verified</option><option value="needs_review">Needs review</option><option value="rejected">Rejected</option></select><textarea value={notes} onChange={(e) => setNotes(e.target.value)} /><button onClick={submit}>Submit verification</button></section>;
+  const saveOverride = async () => { const oldScore = Number(facility.score || 0); const newScore = Number(overrideScore || oldScore); await saveAction('override', { old_score: oldScore, new_score: newScore, justification: overrideReason }); };
+  const saveScenario = async () => { const ids = (facilities || []).slice(0, 8).map((f) => f.unique_id); await api('/api/scenario-shortlists', { method: 'POST', body: JSON.stringify({ user_id: 'CareSignal demo user', location, service, facility_ids: ids, title: scenarioTitle || `${serviceLabel} options in ${location || 'India'}`, notes }) }); await onHistory?.(); };
+  return <section className="card verification"><div className="cardTitle"><h2>Trust Review actions</h2><span>{facility.name}</span></div><p>Persist notes, overrides, shortlists, scenarios, and review decisions to Lakebase.</p><div className="checklist"><label><input type="checkbox" /> Service currently available</label><label><input type="checkbox" /> Equipment/facilities confirmed</label><label><input type="checkbox" /> Specialists/referral pathway confirmed</label></div><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="verified">Verified</option><option value="needs_review">Needs review</option><option value="rejected">Rejected</option></select><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add note, e.g. This facility needs NICU verification" /><div className="assistantActions"><button onClick={submit}>Submit review</button></div>{submitMessage && <p className="successMessage">{submitMessage}</p>}<input value={overrideScore} onChange={(e) => setOverrideScore(e.target.value)} placeholder={`Override score, current ${fmt(facility.score)}`} /><textarea value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} /><button onClick={saveOverride}>Save score override</button><input value={scenarioTitle} onChange={(e) => setScenarioTitle(e.target.value)} placeholder={`Scenario name, e.g. ${serviceLabel} options in ${location || 'India'}`} /><button onClick={saveScenario}>Save scenario shortlist</button></section>;
 }
 
 function VoiceStatusPill({ status }) {
@@ -209,23 +220,26 @@ function App() {
   const [facilities, setFacilities] = useState(fallbackFacilities.map(normalizeFacility));
   const [selected, setSelected] = useState(normalizeFacility(fallbackFacilities[0]));
   const [trustOpen, setTrustOpen] = useState(false), [methodOpen, setMethodOpen] = useState(false);
-  const [radius, setRadius] = useState(250), [evidenceFocus, setEvidenceFocus] = useState('all');
+  const [radius, setRadius] = useState(250);
   const [shortlists, setShortlists] = useState([]), [recentVerifications, setRecentVerifications] = useState([]), [voiceStatus, setVoiceStatus] = useState(null);
+  const [userActions, setUserActions] = useState([]), [scenarioShortlists, setScenarioShortlists] = useState([]);
   const services = filters.services?.length ? filters.services : SERVICE_FALLBACK;
   const serviceDef = services.find((s) => s.service_id === service) || services[0];
   const serviceLabel = serviceDef?.service_label || 'Selected service';
 
   const refreshHistory = async () => {
-    const [shortlistData, verificationData] = await Promise.allSettled([api('/api/shortlists/recent'), api('/api/verifications/recent')]);
+    const [shortlistData, verificationData, actionData, scenarioData] = await Promise.allSettled([api('/api/shortlists/recent'), api('/api/verifications/recent'), api('/api/actions/recent'), api('/api/scenario-shortlists/recent')]);
     if (shortlistData.status === 'fulfilled') setShortlists(shortlistData.value.map((x) => ({ ...x, id: x.shortlist_id, name: x.facility_name })));
     if (verificationData.status === 'fulfilled') setRecentVerifications(verificationData.value);
+    if (actionData.status === 'fulfilled') setUserActions(actionData.value);
+    if (scenarioData.status === 'fulfilled') setScenarioShortlists(scenarioData.value);
   };
 
-  useEffect(() => { api('/api/filters').then((data) => setFilters((old) => ({ ...old, ...data }))).catch(() => {}); refreshHistory(); api('/api/voice/realtime/status').then((gemini) => setVoiceStatus({ gemini, checkedAt: new Date().toISOString() })).catch(() => setVoiceStatus({ gemini: { enabled: false }, checkedAt: new Date().toISOString() })); }, []);
+  useEffect(() => { api(`/api/filters?ts=${Date.now()}`).then((data) => setFilters((old) => ({ ...old, ...data }))).catch(() => {}); refreshHistory(); api('/api/voice/realtime/status').then((gemini) => setVoiceStatus({ gemini, checkedAt: new Date().toISOString() })).catch(() => setVoiceStatus({ gemini: { enabled: false }, checkedAt: new Date().toISOString() })); }, []);
   useEffect(() => { let mounted = true; const params = new URLSearchParams({ procedure: service, limit: '100' }); if (country) params.set('country', country); if (state) params.set('state', state); if (city) params.set('city', city); if (pincode) params.set('pincode', pincode); api(`/api/facilities/top?${params}`).then((data) => { const rows = (Array.isArray(data) ? data : data.facilities || data.data || []).map(normalizeFacility); if (mounted) { setFacilities(rows); setSelected(rows[0] || null); } }).catch(() => { const rows = fallbackFacilities.map(normalizeFacility).filter((f) => (!country || f.country === country) && (!state || f.state === state) && (!city || f.city === city) && (!pincode || f.pincode === pincode)); if (mounted) { setFacilities(rows); setSelected(rows[0] || null); } }); return () => { mounted = false; }; }, [country, state, city, pincode, service]);
   useEffect(() => { const onKey = (e) => { if (e.key === 'Escape') { setTrustOpen(false); setMethodOpen(false); } }; window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey); }, []);
 
-  const displayFacilities = useMemo(() => evidenceFocus === 'uncertain' ? facilities.filter(hasUncertainty) : facilities, [facilities, evidenceFocus]);
+  const displayFacilities = facilities;
   const playVoice = async () => { const audio = new Audio('/api/voice/sample'); try { await audio.play(); } catch { window.open('/api/voice/sample', '_blank'); } };
   const openTrust = (facility = selected) => { if (facility) { setSelected(facility); setTrustOpen(true); } };
   const onVerified = async (status, apiFacility) => { if (!selected) return; const delta = status === 'verified' ? 1.5 : status === 'rejected' ? -2 : 0.5; const updated = normalizeFacility(apiFacility || { ...selected, human_verification_status: status, human_verified: status === 'verified', score: Math.max(0, Math.min(10, Number(selected.score || 0) + delta)) }, 0); setSelected(updated); setFacilities((rows) => rows.map((f) => f.unique_id === updated.unique_id ? updated : f).sort((a, b) => b.score - a.score)); await refreshHistory(); };
@@ -234,12 +248,13 @@ function App() {
   return <>
     <AppHeader activeTab={activeTab} setActiveTab={setActiveTab} selected={selected} />
     <main className="main">
-      <section className="hero filtersOnly"><FilterBar filters={filters} values={{ country, state, city, pincode, service, radius, evidenceFocus }} setters={{ setCountry, setState, setCity, setPincode, setService, setRadius, setEvidenceFocus }} services={services} /></section>
+      <section className="missionStrip">CareSignal helps people find trusted facilities for a healthier lives.</section>
+      <section className="hero filtersOnly"><FilterBar filters={filters} values={{ country, state, city, pincode, service, radius }} setters={{ setCountry, setState, setCity, setPincode, setService, setRadius }} services={services} /></section>
       {activeTab === 'explorer' && <div className="grid single"><FacilityTable facilities={displayFacilities} selected={selected} setSelected={setSelected} onOpenTrust={openTrust} /></div>}
       {activeTab === 'map' && <div className="grid single"><RadiusMap facilities={displayFacilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} onOpenTrust={openTrust} /></div>}
-      {activeTab === 'verification' && <div className="grid"><VerificationForm facility={selected} service={service} serviceLabel={serviceLabel} onVerified={onVerified} /><section className="card"><div className="cardTitle"><h2>Selected facility</h2><span>{selected?.name || 'None selected'}</span></div><button className="trustOpenWide" onClick={() => openTrust()} disabled={!selected}>Open Trust Card</button><button className="trustOpenWide shortlistInline" onClick={addShortlist} disabled={!selected}>Add to shortlist</button><button className="trustOpenWide shortlistInline" onClick={() => setActiveTab('shortlists')} disabled={!shortlists.length}>View shortlists ({shortlists.length})</button><p className="empty">Shortlisted facilities this session: {shortlists.length}</p></section><RecentHistory title="Recent verifications" items={recentVerifications} empty="No verification history yet." /><RecentHistory title="Recent shortlists" items={shortlists} empty="No shortlisted facilities yet." /></div>}
+      {activeTab === 'verification' && <div className="grid"><VerificationForm facility={selected} service={service} serviceLabel={serviceLabel} facilities={displayFacilities} location={city || state || country || 'India'} onVerified={onVerified} onHistory={refreshHistory} /><section className="card"><div className="cardTitle"><h2>Selected facility</h2><span>{selected?.name || 'None selected'}</span></div><button className="trustOpenWide" onClick={() => openTrust()} disabled={!selected}>Open Trust Card</button><button className="trustOpenWide shortlistInline" onClick={addShortlist} disabled={!selected}>Add to shortlist</button><button className="trustOpenWide shortlistInline" onClick={() => setActiveTab('shortlists')} disabled={!shortlists.length && !scenarioShortlists.length}>View shortlists ({shortlists.length + scenarioShortlists.length})</button><p className="empty">Saved actions: {userActions.length} • Scenarios: {scenarioShortlists.length}</p></section><RecentHistory title="Recent user actions" items={userActions} empty="No persisted notes, overrides, or review decisions yet." /><RecentHistory title="Saved scenarios" items={scenarioShortlists} empty="No saved scenarios yet." /><RecentHistory title="Recent verifications" items={recentVerifications} empty="No verification history yet." /></div>}
       {activeTab === 'assistant' && <div className="grid"><RadiusMap facilities={displayFacilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} onOpenTrust={openTrust} /><AssistantPanel service={service} serviceLabel={serviceLabel} selected={selected} onPlayVoice={playVoice} voiceStatus={voiceStatus} /></div>}
-      {activeTab === 'shortlists' && <div className="grid"><Shortlists selected={selected} shortlists={shortlists} onAdd={addShortlist} /><ServiceTable services={services} /></div>}
+      {activeTab === 'shortlists' && <div className="grid"><Shortlists selected={selected} shortlists={[...scenarioShortlists.map((x) => ({ ...x, name: x.title || x.location, meta: `${humanizeTerm(x.service)} • ${(x.facility_ids || []).length} facilities` })), ...shortlists]} onAdd={addShortlist} /><ServiceTable services={services} /></div>}
     </main>
     {trustOpen && <TrustCard facility={selected} serviceLabel={serviceLabel} onClose={() => setTrustOpen(false)} onMethodology={() => setMethodOpen(true)} />}
     {methodOpen && <MethodologyModal onClose={() => setMethodOpen(false)} />}

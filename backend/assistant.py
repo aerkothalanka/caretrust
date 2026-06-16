@@ -125,12 +125,24 @@ def ranked_facilities(
             continue
         if normalized_state and (facility.state or "").lower() != normalized_state:
             continue
-        if normalized_city and (facility.city or "").lower() != normalized_city:
+        if normalized_city and not _location_matches(facility.city, normalized_city):
             continue
         if normalized_pincode and (facility.pincode or "").lower() != normalized_pincode:
             continue
         items.append(facility_top_item(facility, procedure))
     return sorted(items, key=lambda item: (item.score, item.human_verification_count), reverse=True)[:limit]
+
+
+def _location_key(value: str | None) -> str:
+    return "".join(ch for ch in (value or "").lower() if ch.isalnum())
+
+
+def _location_matches(facility_value: str | None, requested_value: str | None) -> bool:
+    facility_key = _location_key(facility_value)
+    requested_key = _location_key(requested_value)
+    if not facility_key or not requested_key:
+        return False
+    return facility_key == requested_key or facility_key in requested_key or requested_key in facility_key
 
 
 def facility_top_item(facility, procedure: str) -> FacilityTopItem:
