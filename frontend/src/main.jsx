@@ -126,17 +126,6 @@ function FilterBar({ filters, values, setters, services }) {
   </section>;
 }
 
-function Metrics({ facilities, radius, shortlistCount }) {
-  const verified = facilities.filter((f) => displayConfidence(f) === 'Human verified').length;
-  return <div className="metricrow kpiRow conciseKpis" aria-label="CareTrust KPI cards">
-    <div className="metric kpiCard"><small>Facilities</small><strong>{facilities.length}</strong></div>
-    <div className="metric kpiCard"><small>Top score / 10</small><strong>{fmt(facilities[0]?.score)}</strong></div>
-    <div className="metric kpiCard"><small>Verified</small><strong>{verified}</strong></div>
-    <div className="metric kpiCard"><small>Shortlisted</small><strong>{shortlistCount}</strong></div>
-    <div className="metric kpiCard"><small>Radius</small><strong>{radius} km</strong></div>
-  </div>;
-}
-
 function FacilityTable({ facilities, selected, setSelected, onOpenTrust }) {
   const choose = (f) => { setSelected(f); onOpenTrust(f); };
   return <section className="card rankings"><div className="cardTitle"><h2>Ranked facilities</h2><span>Click View for evidence and score details</span></div><table className="rank"><thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Score</th><th>Status</th><th>Trust</th></tr></thead><tbody>{facilities.map((f, i) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => choose(f)}><td>{i + 1}</td><td><b>{f.name}</b></td><td>{[f.city, f.state, f.pincode].filter(Boolean).join(', ')}</td><td><b>{fmt(f.score)}</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{displayConfidence(f)}</span></td><td><button className="trustOpenBtn" onClick={(e) => { e.stopPropagation(); choose(f); }}>View</button></td></tr>)}</tbody></table>{!facilities.length && <p className="empty">No facilities match these filters. Try All claims, All states, or a different service.</p>}</section>;
@@ -246,7 +235,6 @@ function App() {
     <AppHeader activeTab={activeTab} setActiveTab={setActiveTab} />
     <main className="main">
       <section className="hero filtersOnly"><FilterBar filters={filters} values={{ country, state, city, pincode, service, radius, evidenceFocus }} setters={{ setCountry, setState, setCity, setPincode, setService, setRadius, setEvidenceFocus }} services={services} /></section>
-      <Metrics facilities={displayFacilities} selected={selected} radius={radius} shortlistCount={shortlists.length} />
       {activeTab === 'explorer' && <div className="grid single"><FacilityTable facilities={displayFacilities} selected={selected} setSelected={setSelected} onOpenTrust={openTrust} /></div>}
       {activeTab === 'map' && <div className="grid single"><RadiusMap facilities={displayFacilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} onOpenTrust={openTrust} /></div>}
       {activeTab === 'verification' && <div className="grid"><VerificationForm facility={selected} service={service} serviceLabel={serviceLabel} onVerified={onVerified} /><section className="card"><div className="cardTitle"><h2>Selected facility</h2><span>{selected?.name || 'None selected'}</span></div><button className="trustOpenWide" onClick={() => openTrust()} disabled={!selected}>Open Trust Card</button><button className="trustOpenWide shortlistInline" onClick={addShortlist} disabled={!selected}>Add to shortlist</button><button className="trustOpenWide shortlistInline" onClick={() => setActiveTab('shortlists')} disabled={!shortlists.length}>View shortlists ({shortlists.length})</button><p className="empty">Shortlisted facilities this session: {shortlists.length}</p></section><RecentHistory title="Recent verifications" items={recentVerifications} empty="No verification history yet." /><RecentHistory title="Recent shortlists" items={shortlists} empty="No shortlisted facilities yet." /></div>}
