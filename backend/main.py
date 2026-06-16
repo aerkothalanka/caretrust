@@ -128,6 +128,11 @@ def verifications(request: VerificationRequest) -> VerificationResponse:
     return VerificationResponse(ok=True, verification_id=record["verification_id"], facility=updated)
 
 
+@app.get("/api/verifications/recent")
+def recent_verifications(limit: int = Query(20, ge=1, le=100)) -> list[dict[str, object]]:
+    return store.recent_verifications(limit)
+
+
 @app.post("/api/shortlists", response_model=ShortlistResponse)
 def shortlists(request: ShortlistRequest) -> ShortlistResponse:
     _validate_procedure(request.procedure)
@@ -135,6 +140,11 @@ def shortlists(request: ShortlistRequest) -> ShortlistResponse:
         raise HTTPException(status_code=404, detail="Facility not found")
     record = store.add_shortlist(request)
     return ShortlistResponse(ok=True, shortlist_id=record["shortlist_id"], created_at=record["created_at"])
+
+
+@app.get("/api/shortlists/recent")
+def recent_shortlists(limit: int = Query(20, ge=1, le=100)) -> list[dict[str, object]]:
+    return store.recent_shortlists(limit)
 
 
 @app.post("/api/assistant/query", response_model=AssistantResponse)

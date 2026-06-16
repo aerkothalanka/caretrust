@@ -145,6 +145,34 @@ class DataStore:
         self._insert_lakebase("planner_shortlists", record)
         return record
 
+    def recent_shortlists(self, limit: int = 20) -> list[dict[str, Any]]:
+        rows = self._select_lakebase(
+            "SELECT shortlist_id, facility_unique_id, procedure, planner_name, notes, created_at FROM public.planner_shortlists ORDER BY created_at DESC LIMIT %s",
+            [limit],
+        ) or list(reversed(self._shortlists[-limit:]))
+        return [self._enrich_facility_record(row, "facility_unique_id") for row in rows[:limit]]
+
+    def recent_verifications(self, limit: int = 20) -> list[dict[str, Any]]:
+        rows = self._select_lakebase(
+            "SELECT verification_id, facility_unique_id, procedure, verification_status, verifier_name, notes, evidence_url, created_at FROM public.facility_human_verifications ORDER BY created_at DESC LIMIT %s",
+            [limit],
+        )
+        if not rows:
+            rows = [
+                {
+                    "verification_id": row.get("verification_id"),
+                    "facility_unique_id": row.get("unique_id"),
+                    "procedure": row.get("procedure"),
+                    "verification_status": row.get("status"),
+                    "verifier_name": row.get("verifier_name"),
+                    "notes": row.get("notes"),
+                    "evidence_url": row.get("evidence_url"),
+                    "created_at": row.get("created_at"),
+                }
+                for row in reversed(self._verifications[-limit:])
+            ]
+        return [self._enrich_facility_record(row, "facility_unique_id") for row in rows[:limit]]
+
     def verification_notes(self, unique_id: str, procedure: str) -> list[str]:
         return [
             str(record["notes"])
@@ -214,6 +242,44 @@ class DataStore:
                 "human_verification_count": len(related),
             }
         )
+
+    def _enrich_facility_record(self, row: dict[str, Any], key: str) -> dict[str, Any]:
+        record = dict(row)
+        facility_id = record.get(key) or record.get("unique_id")
+        facility = self.get_facility(str(facility_id)) if facility_id else None
+        if facility:
+            record["facility_name"] = facility.name
+            record["city"] = facility.city
+            record["state"] = facility.state
+        if isinstance(record.get("created_at"), datetime):
+            record["created_at"] = record["created_at"].isoformat()
+        return record
+
+    def _select_lakebase(self, sql: str, params: list[Any] | None = None) -> list[dict[str, Any]]:
+        if not all(os.getenv(name) for name in ["PGHOST", "PGDATABASE", "PGUSER", "PGPASSWORD"]):
+            return []
+        try:
+            import psycopg2
+        except Exception:
+            return []
+        try:
+            conn = psycopg2.connect(
+                host=os.getenv("PGHOST"),
+                database=os.getenv("PGDATABASE"),
+                user=os.getenv("PGUSER"),
+                password=os.getenv("PGPASSWORD"),
+                port=os.getenv("PGPORT", "5432"),
+                sslmode=os.getenv("PGSSLMODE", "require"),
+            )
+            with conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(sql, params or [])
+                    columns = [column[0] for column in (cursor.description or [])]
+                    rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            conn.close()
+            return rows
+        except Exception:
+            return []
 
     def _insert_lakebase(self, table: str, values: dict[str, Any]) -> None:
         if not all(os.getenv(name) for name in ["PGHOST", "PGDATABASE", "PGUSER", "PGPASSWORD"]):
