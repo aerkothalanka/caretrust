@@ -9,10 +9,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .assistant import answer_query, facility_top_item, ranked_facilities
+from .call_notes import generate_demo_call_notes
 from .data import APP_SCHEMA, FACILITIES_TABLE, NFHS_TABLE, PINCODE_TABLE, DataStore
 from .models import (
     AssistantQuery,
     AssistantResponse,
+    FacilityCallRequest,
+    FacilityCallResponse,
     ScenarioShortlistRequest,
     ScenarioShortlistResponse,
     ShortlistRequest,
@@ -161,10 +164,43 @@ def verify_trust_links(request: TrustSourceVerifyRequest) -> TrustSourceVerifyRe
                 "verified_count": result.get("verified_count"),
                 "partial_count": result.get("partial_count"),
                 "failed_count": result.get("failed_count"),
+                "checks": result.get("checks", []),
+                "agent_bricks": result.get("agent_bricks"),
+                "information_date": result.get("checked_at"),
+                "source": "source_links" if request.mode == "crawl" else "agent_bricks_review",
             },
         )
     )
     return TrustSourceVerifyResponse(ok=True, result=result)
+
+
+@app.post("/api/trust/call-facility", response_model=FacilityCallResponse)
+def call_facility_demo(request: FacilityCallRequest) -> FacilityCallResponse:
+    _validate_procedure(request.procedure)
+    facility = store.get_facility(request.unique_id)
+    if facility is None:
+        raise HTTPException(status_code=404, detail="Facility not found")
+    service_label = str(PROCEDURES[request.procedure]["label"])
+    result = generate_demo_call_notes(facility, request.procedure, service_label)
+    store.add_user_action(
+        UserActionRequest(
+            user_id="CareSignal demo user",
+            facility_id=facility.unique_id,
+            action_type="call_note",
+            action_data={
+                "procedure": request.procedure,
+                "facility_name": facility.name,
+                "summary": result.get("summary"),
+                "conversation": result.get("conversation", []),
+                "verified_claims": result.get("verified_claims", []),
+                "open_questions": result.get("open_questions", []),
+                "recommendation": result.get("recommendation"),
+                "information_date": result.get("information_date"),
+                "source": result.get("source"),
+            },
+        )
+    )
+    return FacilityCallResponse(ok=True, result=result)
 
 
 @app.post("/api/verifications", response_model=VerificationResponse)

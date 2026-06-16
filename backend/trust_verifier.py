@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import re
+from datetime import datetime, timezone
 from html.parser import HTMLParser
 from typing import Any
 from urllib.error import URLError
@@ -91,6 +92,7 @@ def verify_trust_sources(facility: Facility, procedure: str, service_label: str,
         "failed_count": failed,
         "checks": checks,
         "agent_bricks": agent,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
     }
 
 

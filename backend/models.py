@@ -105,7 +105,7 @@ class ShortlistResponse(BaseModel):
     created_at: datetime
 
 
-ActionType = Literal["note", "override", "shortlist", "review", "scenario", "source_verification"]
+ActionType = Literal["note", "override", "shortlist", "review", "scenario", "source_verification", "call_note"]
 
 
 class TrustSourceVerifyRequest(BaseModel):
@@ -115,6 +115,16 @@ class TrustSourceVerifyRequest(BaseModel):
 
 
 class TrustSourceVerifyResponse(BaseModel):
+    ok: bool
+    result: dict[str, Any]
+
+
+class FacilityCallRequest(BaseModel):
+    unique_id: str
+    procedure: str
+
+
+class FacilityCallResponse(BaseModel):
     ok: bool
     result: dict[str, Any]
 
