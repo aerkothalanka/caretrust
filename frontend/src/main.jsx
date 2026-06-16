@@ -207,6 +207,70 @@ function RadiusMap({ facilities, selected, setSelected, radius, setRadius, onOpe
   const visible = useMemo(() => facilities.map((f) => ({ facility: f, distance: distanceKm(center, f) })).filter(({ facility, distance }) => distance === null || distance <= effectiveRadius || facility.unique_id === center?.unique_id), [facilities, center?.unique_id, center?.latitude, center?.longitude, effectiveRadius]);
   return <section className="card mapCard"><div className="cardTitle"><h2>Google Maps Radius</h2><span>{visible.length} facilities inside selected radius</span></div><div className="radiusControl"><label>Radius: <b>{Number(radius) > 750 ? '>750KM' : `${radius} km`}</b><input type="range" min="25" max="751" step="25" value={radius} onChange={(e) => setRadius(Number(e.target.value))} /></label></div><GoogleMapView center={center} radius={radius} /><div className="mapList">{visible.slice(0, 8).map(({ facility: f, distance }) => <button key={f.unique_id} onClick={() => { setSelected(f); onOpenTrust(f); }}><b>{f.name}</b><span>{distance?.toFixed(0) || 0} km • {f.city || f.state} • View Trust Card</span></button>)}</div></section>;
 }
+function buildDemoCallPreview(facility, procedure, serviceLabel) {
+  const name = facility?.name || 'Selected Facility';
+  const lower = name.toLowerCase();
+  const cardiacTurns = [
+    ['CareSignal Agent', `Hello, I am calling on behalf of a care coordinator. Can you confirm whether ${name} currently handles ${serviceLabel} referrals?`],
+    ['Facility Desk', 'Yes, cardiac cases are handled through our cardiac sciences team. Please route patient reports and urgency details to the coordinator.'],
+    ['CareSignal Agent', 'Is ICU or post-operative critical care coordination available if the case is accepted?'],
+    ['Facility Desk', 'Yes, but bed status changes during the day. The coordinator must confirm availability before transfer.'],
+    ['CareSignal Agent', 'What should the referring team prepare before calling back?'],
+    ['Facility Desk', 'Diagnosis, recent reports, patient vitals, insurance or payment details, and expected arrival time.'],
+  ];
+  const genericTurns = [
+    ['CareSignal Agent', `Hello, I am checking whether ${name} can handle a referral for ${serviceLabel}.`],
+    ['Facility Desk', 'We can route the inquiry, but the department coordinator needs patient details before confirming.'],
+    ['CareSignal Agent', 'What information should the care coordinator prepare?'],
+    ['Facility Desk', 'Diagnosis, recent reports, current condition, payer details, and requested appointment or transfer date.'],
+  ];
+  const conversation = (lower.includes('narayana') || lower.includes('cardiac') || lower.includes('fortis') || lower.includes('escorts') ? cardiacTurns : genericTurns).map(([speaker, line]) => ({ speaker, text: line }));
+  return {
+    facility_id: facility?.unique_id,
+    facility_name: name,
+    procedure,
+    service_label: serviceLabel,
+    status: 'playing_demo_call',
+    information_date: new Date().toISOString(),
+    summary: `Playing demo call with ${name}. Final notes will be saved to Lakebase after this simulated facility call completes.`,
+    verified_claims: ['Demo call playback started from the Call Facility button.', 'Transcript is shown turn-by-turn for the live demo.'],
+    open_questions: ['Real call-agent integration is still pending.'],
+    recommendation: 'Use this playback for the demo, then use the saved call notes as dated facility information.',
+    conversation,
+    playback_seed: Date.now(),
+  };
+}
+
+function playDemoCallTone(kind = 'dial') {
+  if (typeof window === 'undefined') return false;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return false;
+    const ctx = window.__careSignalAudioContext || new Ctx();
+    window.__careSignalAudioContext = ctx;
+    if (ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    const make = (frequency, start, duration, gainValue = 0.045) => {
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.0001, now + start);
+      gain.gain.exponentialRampToValueAtTime(gainValue, now + start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + start + duration);
+      oscillator.connect(gain).connect(ctx.destination);
+      oscillator.start(now + start);
+      oscillator.stop(now + start + duration + 0.03);
+    };
+    if (kind === 'agent') { make(720, 0, 0.16); make(920, 0.18, 0.12); }
+    else if (kind === 'desk') { make(420, 0, 0.18); make(520, 0.2, 0.14); }
+    else { make(350, 0, 0.22); make(440, 0.28, 0.22); make(350, 0.56, 0.22); }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function RecentHistory({ title, items, empty }) {
   return <section className="card historyCard"><div className="cardTitle"><h2>{title}</h2><span>Read Back From Lakebase</span></div><div className="historyList">{items.slice(0, 6).map((item) => { const data = item.action_data || {}; const label = item.action_type || item.status || item.verification_status || item.procedure || item.service; const detail = data.note || data.justification || data.notes || data.title || data.status || item.notes || item.location || 'Saved'; return <div key={item.action_id || item.verification_id || item.shortlist_id || item.created_at} className="historyItem"><b>{item.facility_name || item.facility_unique_id || item.facility_id || item.title || item.unique_id || item.location || 'Scenario'}</b><span>{humanizeTerm(label)} • {detail}</span><small>{item.created_at || ''}</small></div>; })}{!items.length && <p className="empty">{empty}</p>}</div></section>;
 }
@@ -240,52 +304,74 @@ function VerificationForm({ facility, service, serviceLabel, facilities, locatio
 function CallNotesPanel({ result }) {
   const [playing, setPlaying] = useState(false);
   const [activeTurn, setActiveTurn] = useState(-1);
-  const previousResultRef = useRef(null);
+  const [audioStatus, setAudioStatus] = useState('Visual playback ready');
+  const previousSeedRef = useRef(null);
   const conversation = result?.conversation || [];
   const speakTurn = (index) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis || !conversation[index]) return;
-    window.speechSynthesis.cancel();
     const turn = conversation[index];
-    const utterance = new SpeechSynthesisUtterance(`${turn.speaker}. ${turn.text}`);
-    utterance.rate = 0.95;
-    utterance.pitch = turn.speaker?.toLowerCase().includes('agent') ? 1.05 : 0.9;
-    window.speechSynthesis.speak(utterance);
+    if (!turn) return;
+    const toneOk = playDemoCallTone(turn.speaker?.toLowerCase().includes('agent') ? 'agent' : 'desk');
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(`${turn.speaker}. ${turn.text}`);
+        utterance.rate = 0.92;
+        utterance.pitch = turn.speaker?.toLowerCase().includes('agent') ? 1.05 : 0.88;
+        utterance.onstart = () => setAudioStatus('Voice playback active');
+        utterance.onerror = () => setAudioStatus(toneOk ? 'Browser voice blocked; playing demo tones + transcript' : 'Audio blocked; transcript playback active');
+        window.speechSynthesis.speak(utterance);
+        window.setTimeout(() => {
+          if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) setAudioStatus(toneOk ? 'Demo tones + transcript active' : 'Transcript playback active');
+        }, 500);
+      } catch (_) {
+        setAudioStatus(toneOk ? 'Demo tones + transcript active' : 'Transcript playback active');
+      }
+    } else {
+      setAudioStatus(toneOk ? 'Demo tones + transcript active' : 'Transcript playback active');
+    }
   };
   const startPlayback = () => {
     if (!conversation.length) return;
+    playDemoCallTone('dial');
     setActiveTurn(0);
     setPlaying(true);
-    speakTurn(0);
+    setAudioStatus('Starting demo call playback');
+    window.setTimeout(() => speakTurn(0), 250);
   };
   const stopPlayback = () => {
     setPlaying(false);
+    setAudioStatus('Playback stopped');
     if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
   };
   useEffect(() => {
-    if (!result) return;
-    if (previousResultRef.current !== result) {
-      previousResultRef.current = result;
+    const seed = result?.playback_seed || result?.information_date || result?.summary;
+    if (!result || !seed) return undefined;
+    if (previousSeedRef.current !== seed) {
+      previousSeedRef.current = seed;
       setActiveTurn(-1);
       setPlaying(false);
-      window.setTimeout(startPlayback, 250);
+      setAudioStatus('Dialing facility…');
+      const timer = window.setTimeout(startPlayback, 120);
+      return () => window.clearTimeout(timer);
     }
-    return () => { if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel(); };
-  }, [result]);
+    return undefined;
+  }, [result?.playback_seed, result?.information_date]);
   useEffect(() => {
     if (!playing || activeTurn < 0) return undefined;
     if (activeTurn >= conversation.length - 1) {
-      const doneTimer = window.setTimeout(() => setPlaying(false), 1200);
+      const doneTimer = window.setTimeout(() => { setPlaying(false); setAudioStatus('Demo call playback complete'); }, 1600);
       return () => window.clearTimeout(doneTimer);
     }
     const timer = window.setTimeout(() => {
       const next = activeTurn + 1;
       setActiveTurn(next);
       speakTurn(next);
-    }, 2200);
+    }, 2600);
     return () => window.clearTimeout(timer);
   }, [playing, activeTurn, conversation.length]);
+  useEffect(() => () => { if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel(); }, []);
   if (!result) return null;
-  return <div className="callNotesPanel"><div><b>Demo Call Notes</b><span>Information As Of {formatInfoDate(result.information_date)}</span></div><div className="callPlaybackBar"><span>{playing ? `Playing Demo Call · Turn ${activeTurn + 1}/${conversation.length}` : 'Demo Call Ready'}</span><button type="button" onClick={playing ? stopPlayback : startPlayback}>{playing ? 'Stop Playback' : 'Play Demo Call'}</button></div><p>{result.summary}</p><div className="callNotesColumns"><div><h3>Confirmed</h3>{(result.verified_claims || []).map((item) => <span key={item}>{item}</span>)}</div><div><h3>Still Check</h3>{(result.open_questions || []).map((item) => <span key={item}>{item}</span>)}</div></div><div className="callTranscript"><h3>Demo Conversation</h3>{conversation.map((turn, i) => <p key={`${turn.speaker}-${i}`} className={i === activeTurn ? 'activeTurn' : i < activeTurn ? 'playedTurn' : ''}><b>{turn.speaker}:</b> {turn.text}</p>)}</div></div>;
+  return <div className="callNotesPanel"><div><b>Live Demo Call</b><span>Information As Of {formatInfoDate(result.information_date)}</span></div><div className={`callPlaybackBar ${playing ? 'isPlaying' : ''}`} aria-live="polite"><span>{playing ? `▶ Playing Demo Call · Turn ${activeTurn + 1}/${conversation.length}` : audioStatus}</span><button type="button" onClick={playing ? stopPlayback : startPlayback}>{playing ? 'Stop Playback' : 'Play Demo Call'}</button></div><p>{result.summary}</p><div className="callNotesColumns"><div><h3>Confirmed</h3>{(result.verified_claims || []).map((item) => <span key={item}>{item}</span>)}</div><div><h3>Still Check</h3>{(result.open_questions || []).map((item) => <span key={item}>{item}</span>)}</div></div><div className="callTranscript"><h3>Demo Conversation</h3>{conversation.map((turn, i) => <p key={`${turn.speaker}-${i}`} className={i === activeTurn ? 'activeTurn' : i < activeTurn ? 'playedTurn' : ''}><b>{turn.speaker}:</b> {turn.text}</p>)}</div></div>;
 }
 
 function FacilityInfoTimeline({ actions, facility }) {
@@ -354,7 +440,7 @@ function App() {
   const onVerified = async (status, apiFacility) => { if (!selected) return; const delta = status === 'verified' ? 1.5 : status === 'rejected' ? -2 : 0.5; const updated = normalizeFacility(apiFacility || { ...selected, human_verification_status: status, human_verified: status === 'verified', score: Math.max(0, Math.min(10, Number(selected.score || 0) + delta)) }, 0); setSelected(updated); setFacilities((rows) => rows.map((f) => f.unique_id === updated.unique_id ? updated : f).sort((a, b) => b.score - a.score)); await refreshHistory(); };
   const addShortlist = async () => { if (!selected) return; const optimistic = { id: `${selected.unique_id}-${Date.now()}`, name: selected.name, meta: `${serviceLabel} • ${selected.city || selected.state || 'India'}` }; setShortlists((x) => [optimistic, ...x]); try { await api('/api/shortlists', { method: 'POST', body: JSON.stringify({ unique_id: selected.unique_id, procedure: service, notes: `${serviceLabel} shortlist` }) }); await refreshHistory(); } catch (_) {} };
   const verifyTrustSources = async (mode = 'crawl') => { if (!selected) return; setTrustVerifying(true); setTrustVerification(null); try { const data = await api('/api/trust/verify-links', { method: 'POST', body: JSON.stringify({ unique_id: selected.unique_id, procedure: service, mode }) }); setTrustVerification(data.result); await refreshHistory(); await loadFacilityUpdates(selected.unique_id); } catch (err) { setTrustVerification({ facility_id: selected.unique_id, facility_name: selected.name, mode, status: 'error', summary: err.message || 'Source verification failed.', checks: [] }); } finally { setTrustVerifying(false); } };
-  const callFacilityDemo = async () => { if (!selected) return; setCallingFacility(true); try { const data = await api('/api/trust/call-facility', { method: 'POST', body: JSON.stringify({ unique_id: selected.unique_id, procedure: service }) }); setCallResult(data.result); await refreshHistory(); await loadFacilityUpdates(selected.unique_id); } catch (err) { setCallResult({ facility_id: selected.unique_id, facility_name: selected.name, information_date: new Date().toISOString(), summary: err.message || 'Demo call note generation failed.', conversation: [], verified_claims: [], open_questions: [] }); } finally { setCallingFacility(false); } };
+  const callFacilityDemo = async () => { if (!selected) return; const preview = buildDemoCallPreview(selected, service, serviceLabel); playDemoCallTone('dial'); setCallResult(preview); setCallingFacility(true); try { const data = await api('/api/trust/call-facility', { method: 'POST', body: JSON.stringify({ unique_id: selected.unique_id, procedure: service }) }); setCallResult({ ...data.result, playback_seed: Date.now() }); await refreshHistory(); await loadFacilityUpdates(selected.unique_id); } catch (err) { setCallResult({ ...preview, status: 'demo_call_error', summary: err.message || 'Demo call note generation failed; playing local demo transcript.' }); } finally { setCallingFacility(false); } };
 
   return <>
     <AppHeader activeTab={activeTab} setActiveTab={setActiveTab} selected={selected} />
