@@ -112,13 +112,13 @@ function AppHeader({ activeTab, setActiveTab, selected }) {
 function ProcedureDropdown({ services, selectedValues, onChange }) {
   const [open, setOpen] = useState(false);
   const selectedSet = new Set(selectedValues || []);
-  const selectedLabels = services.filter((s) => selectedSet.has(s.service_id)).map((s) => s.service_label);
+  const selectedLabels = services.filter((s) => selectedSet.has(s.service_id)).map((s) => humanizeTerm(s.service_label));
   const summary = selectedLabels.length === 0 ? 'Select Procedures' : selectedLabels.length === 1 ? selectedLabels[0] : `${selectedLabels.length} Procedures Selected`;
   const toggle = (id) => {
     const next = selectedSet.has(id) ? selectedValues.filter((value) => value !== id) : [...selectedValues, id];
     onChange(next.length ? next : [services[0]?.service_id].filter(Boolean));
   };
-  return <div className="procedureDropdown"><button type="button" className="procedureToggle" onClick={() => setOpen((x) => !x)} aria-expanded={open}>{summary}</button>{open && <div className="procedureMenu">{services.map((s) => <label key={s.service_id} className="procedureOption"><input type="checkbox" checked={selectedSet.has(s.service_id)} onChange={() => toggle(s.service_id)} /> <span>{s.service_label}</span></label>)}</div>}</div>;
+  return <div className="procedureDropdown"><button type="button" className="procedureToggle" onClick={() => setOpen((x) => !x)} aria-expanded={open}>{summary}</button>{open && <div className="procedureMenu">{services.map((s) => <label key={s.service_id} className="procedureOption"><input type="checkbox" checked={selectedSet.has(s.service_id)} onChange={() => toggle(s.service_id)} /> <span>{humanizeTerm(s.service_label)}</span></label>)}</div>}</div>;
 }
 
 function FilterBar({ filters, values, setters, services }) {
