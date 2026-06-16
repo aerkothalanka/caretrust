@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CareTrust Architecture Diagram</title>
+  <style>
+    :root {
+      --bg: #f7f3ee;
+      --ink: #141414;
+      --muted: #6b6259;
+      --orange: #f36c21;
+      --orange-2: #ff9a4a;
+      --teal: #1aa89b;
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+      --line: rgba(20, 20, 20, .12);
+      --card: rgba(255,255,255,.86);
+      --shadow: 0 24px 60px rgba(34, 25, 16, .13);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      min-height: 100%;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 10% 8%, rgba(243,108,33,.22), transparent 28%),
+        radial-gradient(circle at 88% 10%, rgba(26,168,155,.20), transparent 30%),
+        radial-gradient(circle at 52% 92%, rgba(139,92,246,.16), transparent 34%),
+        linear-gradient(135deg, #fbf8f4 0%, #f1ebe2 100%);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+    }
+
+    .canvas {
+      position: relative;
+      width: min(94vw, calc(94vh * 16 / 9), 1480px);
+      aspect-ratio: 16 / 9;
+      overflow: hidden;
+      border-radius: 36px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.82), rgba(255,255,255,.56)),
+        linear-gradient(135deg, rgba(243,108,33,.08), rgba(26,168,155,.06) 45%, rgba(139,92,246,.07));
+      border: 1px solid rgba(255,255,255,.75);
+      box-shadow: 0 34px 90px rgba(43, 32, 19, .18);
+      padding: clamp(16px, 1.65vw, 28px);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(20,20,20,.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(20,20,20,.035) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,.7), transparent 80%);
+      pointer-events: none;
+    }
+
+    header {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: clamp(10px, 1vw, 16px);
+      flex: 0 0 auto;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 11px;
+      color: var(--orange);
+      font-weight: 860;
+      letter-spacing: .02em;
+      font-size: 18px;
+      text-transform: uppercase;
+    }
+
+    .brand-mark {
+      width: 30px; height: 30px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: white;
+      background: linear-gradient(135deg, var(--orange), #fb3b1f);
+      box-shadow: 0 11px 22px rgba(243,108,33,.28);
+      font-weight: 900;
+    }
+
+    h1 {
+      margin: 5px 0 6px;
+      font-size: clamp(31px, 3.15vw, 56px);
+      line-height: .95;
+      letter-spacing: -.055em;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(13px, 1.02vw, 17px);
+      letter-spacing: -.01em;
+      max-width: 720px;
+    }
+
+    .badge {
+      flex: 0 0 auto;
+      margin-top: 4px;
+      padding: 13px 16px;
+      border-radius: 999px;
+      background: rgba(20,20,20,.88);
+      color: white;
+      font-weight: 760;
+      letter-spacing: .02em;
+      box-shadow: 0 14px 34px rgba(20,20,20,.18);
+      white-space: nowrap;
+    }
+
+    .architecture {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: clamp(16px, 1.8vw, 28px);
+      align-items: stretch;
+      flex: 1 1 auto;
+      min-height: 0;
+      padding-bottom: clamp(12px, 1.2vw, 18px);
+    }
+
+    .layer {
+      position: relative;
+      min-height: 100%;
+      padding: clamp(14px, 1.35vw, 20px);
+      border-radius: 30px;
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,.9);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .layer::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 7px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    }
+
+    .layer.data { --accent: var(--orange); --accent-2: #ffbe7a; }
+    .layer.agent { --accent: var(--teal); --accent-2: #56d4c4; }
+    .layer.app { --accent: var(--purple); --accent-2: #60a5fa; }
+
+    .layer-head { display: flex; align-items: center; gap: 12px; margin-bottom: clamp(12px, 1.1vw, 17px); }
+    .icon {
+      width: 44px; height: 44px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--accent), white 18%), var(--accent));
+      color: white;
+      font-size: 21px;
+      box-shadow: 0 13px 24px color-mix(in srgb, var(--accent), transparent 72%);
+    }
+    h2 { margin: 0; font-size: clamp(20px, 1.85vw, 26px); letter-spacing: -.035em; }
+    .layer-kicker { margin: 2px 0 0; color: var(--muted); font-size: clamp(10px, .9vw, 13px); font-weight: 720; text-transform: uppercase; letter-spacing: .08em; }
+
+    .pipeline { display: grid; gap: 10px; }
+    .tier {
+      position: relative;
+      padding: clamp(10px, .95vw, 14px) clamp(12px, 1vw, 16px) clamp(10px, .95vw, 14px) clamp(16px, 1.2vw, 20px);
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(255,255,255,.82), rgba(255,255,255,.58));
+      border: 1px solid var(--line);
+      box-shadow: 0 12px 24px rgba(0,0,0,.045);
+    }
+    .tier::before {
+      content: "";
+      position: absolute;
+      left: 0; top: 14px; bottom: 14px;
+      width: 5px;
+      border-radius: 0 10px 10px 0;
+      background: var(--c);
+    }
+    .tier b { display: block; font-size: clamp(15px, 1.35vw, 19px); margin-bottom: 3px; letter-spacing: -.02em; }
+    .tier span { color: var(--muted); font-size: clamp(11px, .88vw, 12.5px); line-height: 1.18; }
+    .bronze { --c: #bf6b28; }
+    .silver { --c: #8a929a; }
+    .gold { --c: #d9a526; }
+
+    .agent-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex: 1; }
+    .agent-card, .app-card {
+      border-radius: 18px;
+      padding: clamp(11px, .95vw, 15px);
+      background: linear-gradient(135deg, rgba(255,255,255,.83), rgba(255,255,255,.58));
+      border: 1px solid var(--line);
+      min-height: 66px;
+      box-shadow: 0 12px 24px rgba(0,0,0,.045);
+    }
+    .agent-card.big { grid-column: auto; min-height: 66px; display: block; }
+    .mini-icon {
+      width: 38px; height: 38px; border-radius: 14px;
+      display: grid; place-items: center;
+      background: rgba(26,168,155,.12);
+      color: var(--teal);
+      font-size: 22px; font-weight: 900;
+    }
+    .agent-card b, .app-card b { display: block; font-size: clamp(14.5px, 1.15vw, 18px); margin-bottom: 5px; letter-spacing: -.02em; }
+    .agent-card span, .app-card span { display: block; color: var(--muted); font-size: clamp(11px, .84vw, 12.5px); line-height: 1.18; }
+
+    .app-stack { display: grid; gap: 10px; flex: 1; }
+    .app-card { min-height: 66px; display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
+    .app-card .mini-icon { background: rgba(139,92,246,.11); color: var(--purple); }
+
+    .arrow {
+      position: absolute;
+      z-index: 3;
+      top: 57%;
+      width: 64px;
+      height: 28px;
+      pointer-events: none;
+      filter: drop-shadow(0 9px 12px rgba(20,20,20,.08));
+    }
+    .arrow.one { left: calc(33.333% - 31px); }
+    .arrow.two { left: calc(66.666% - 31px); }
+    .arrow svg { overflow: visible; }
+    .flow-label {
+      display: none;
+      position: absolute;
+      z-index: 4;
+      top: calc(57% - 38px);
+      transform: translateX(-50%);
+      background: rgba(20,20,20,.88);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 760;
+      white-space: nowrap;
+      letter-spacing: .01em;
+    }
+    .flow-label.one { left: 34.2%; }
+    .flow-label.two { left: 67.5%; }
+
+    .outcome {
+      position: relative;
+      z-index: 2;
+      min-height: 48px;
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 10px 18px;
+      background: linear-gradient(90deg, rgba(20,20,20,.92), rgba(20,20,20,.82));
+      color: white;
+      box-shadow: 0 22px 46px rgba(20,20,20,.2);
+      font-size: clamp(11.5px, .9vw, 15px);
+      font-weight: 710;
+      letter-spacing: -.01em;
+      flex: 0 0 auto;
+    }
+    .outcome em { color: #ffb36d; font-style: normal; }
+
+    @media (max-width: 1000px) {
+      .canvas { aspect-ratio: auto; min-height: 1080px; }
+      .architecture { grid-template-columns: 1fr; padding-bottom: 105px; }
+      .arrow, .flow-label { display: none; }
+      .outcome { left: 24px; right: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="canvas" role="img" aria-label="CareTrust architecture diagram showing Data Layer, Agent Layer, and App Layer">
+    <div class="grid"></div>
+    <header>
+      <div>
+        <div class="brand"><span class="brand-mark">CT</span> CareTrust</div>
+        <h1>Architecture Overview</h1>
+        <p class="subtitle">Trusted healthcare data flows through explainable agents into a planner-facing experience that turns evidence into action.</p>
+      </div>
+      <div class="badge">Databricks + Agentic AI</div>
+    </header>
+
+    <section class="architecture">
+      <article class="layer data">
+        <div class="layer-head">
+          <div class="icon">◈</div>
+          <div><h2>Data Layer</h2><p class="layer-kicker">Delta intelligence foundation</p></div>
+        </div>
+        <div class="pipeline">
+          <div class="tier bronze"><b>Bronze</b><span>Raw source landing with lineage.</span></div>
+          <div class="tier silver"><b>Silver</b><span>Cleansed, matched, geocoded, enriched.</span></div>
+          <div class="tier gold"><b>Gold</b><span>Trust-ready tables for the app.</span></div>
+        </div>
+      </article>
+
+      <article class="layer agent">
+        <div class="layer-head">
+          <div class="icon">✦</div>
+          <div><h2>Agent Layer</h2><p class="layer-kicker">Explainable care navigation</p></div>
+        </div>
+        <div class="agent-grid">
+          <div class="agent-card"><b>Trust Scoring</b><span>Evidence + confidence.</span></div>
+          <div class="agent-card"><b>Planner Assistant</b><span>Compare, explain, plan.</span></div>
+          <div class="agent-card"><b>Voice + Phone</b><span>Calls, intake, follow-up.</span></div>
+          <div class="agent-card"><b>Human-in-the-Loop</b><span>Review, override, verify.</span></div>
+        </div>
+      </article>
+
+      <article class="layer app">
+        <div class="layer-head">
+          <div class="icon">▣</div>
+          <div><h2>App Layer</h2><p class="layer-kicker">Planner workflow + decisions</p></div>
+        </div>
+        <div class="app-stack">
+          <div class="app-card"><div class="mini-icon">1</div><div><b>User Plan Experience</b><span>Explorer, geo search, chat.</span></div></div>
+          <div class="app-card"><div class="mini-icon">2</div><div><b>Service Layer</b><span>Scoring, search, conversation APIs.</span></div></div>
+          <div class="app-card"><div class="mini-icon">3</div><div><b>TrustCard Actions</b><span>Compare, call, verify, escalate.</span></div></div>
+        </div>
+      </article>
+    </section>
+
+    <div class="flow-label one">trusted features</div>
+    <div class="flow-label two">actionable guidance</div>
+    <div class="arrow one"><svg width="64" height="28" viewBox="0 0 64 28" fill="none"><path d="M3 14H55" stroke="#141414" stroke-width="3" stroke-linecap="round"/><path d="M43 4L59 14L43 24" stroke="#141414" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="arrow two"><svg width="64" height="28" viewBox="0 0 64 28" fill="none"><path d="M3 14H55" stroke="#141414" stroke-width="3" stroke-linecap="round"/><path d="M43 4L59 14L43 24" stroke="#141414" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+    <div class="outcome">Outcome: <em>evidence-backed care choices</em> with transparent trust, faster planner workflows, and human oversight at the moments that matter.</div>
+  </main>
+</body>
+</html>
