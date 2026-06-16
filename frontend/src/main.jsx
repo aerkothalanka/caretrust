@@ -162,6 +162,57 @@ function FacilityTable({ facilities, selected, setSelected, onOpenTrust, onOpenR
   const rows = baseRows.filter(({ f, rank, confidence, trustTier, location }) => (!rankFilter || String(rank).startsWith(rankFilter.trim())) && (!nameFilter || String(f.name || '').toLowerCase().includes(nameFilter.trim().toLowerCase())) && (!locationFilter || location === locationFilter) && (!trustFilter || trustTier.toLowerCase().includes(trustFilter)) && (!confidenceValue || confidence >= Number(confidenceValue)));
   return <section className="card rankings"><div className="cardTitle"><h2>Ranked Facilities</h2></div><table className="rank"><thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Confidence %</th><th>Trust Tier</th><th>Evidence</th></tr><tr className="rankFilterRow"><th><input value={rankFilter} onChange={(e) => setRankFilter(e.target.value)} placeholder="Rank" /></th><th><input value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} placeholder="Facility Name" /></th><th><select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}><option value="">All Locations</option>{locationOptions.map((loc) => <option key={loc} value={loc}>{loc}</option>)}</select></th><th><input type="number" min="0" max="100" value={confidenceValue} onChange={(e) => setConfidenceValue(e.target.value)} placeholder="Confidence" /></th><th><select value={trustFilter} onChange={(e) => setTrustFilter(e.target.value)}><option value="">All</option><option value="high">High</option><option value="medium">Medium</option><option value="needs">Needs Review</option><option value="verified">Verified</option></select></th><th></th></tr></thead><tbody>{rows.map(({ f, rank, confidence, trustTier, location }) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => choose(f)}><td>{rank}</td><td><span className="facilityName">{f.name}</span></td><td>{location}</td><td><b>{confidence}%</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{trustTier}</span></td><td><button className="evidenceLink" onClick={(e) => review(f, e)}>Click Here</button></td></tr>)}</tbody></table>{!rows.length && <p className="empty">No Facilities Match These Table Filters.</p>}</section>;
 }
+
+function normalizeUrlList(...values) {
+  const urls = [];
+  const add = (value) => {
+    if (!value) return;
+    if (Array.isArray(value)) { value.forEach(add); return; }
+    if (typeof value === 'object') { Object.values(value).forEach(add); return; }
+    String(value).split(/[\s,;|]+/).map((x) => x.trim()).filter(Boolean).forEach((item) => {
+      const cleaned = item.replace(/^["'\[]+|["'\]]+$/g, '');
+      if (/^https?:\/\//i.test(cleaned) && !urls.includes(cleaned)) urls.push(cleaned);
+    });
+  };
+  values.forEach(add);
+  return urls;
+}
+
+function scoreBreakdownEntries(facility, sources, specialties, procedures, equipment) {
+  const parseRaw = (raw) => {
+    if (!raw) return [];
+    if (typeof raw === 'string') {
+      try { return parseRaw(JSON.parse(raw)); }
+      catch (_) { return []; }
+    }
+    if (Array.isArray(raw)) {
+      return raw.map((x, i) => Array.isArray(x) ? x : [x.label || x.key || x.name || `Component ${i + 1}`, x.score ?? x.value ?? 0, x.max_score ?? x.max]);
+    }
+    if (typeof raw === 'object') return Object.entries(raw).map(([k, v]) => Array.isArray(v) ? [k, v[0], v[1]] : [k, v]);
+    return [];
+  };
+  const rawEntries = parseRaw(facility.score_breakdown || facility.source_row?.score_breakdown || facility.scoring_breakdown);
+  const usableRaw = rawEntries.filter(([k, v]) => k && v !== undefined && v !== null && v !== '');
+  if (usableRaw.length) return usableRaw;
+  const termCount = specialties.length + procedures.length + equipment.length;
+  const locationParts = [facility.city, facility.state, facility.pincode, facility.country].filter(Boolean).length;
+  const hasContact = Boolean(facility.phone || facility.phone_number || facility.contact_number || facility.website || facility.source_url || sources.length);
+  const verified = facility.human_verified || facility.human_verification_status === 'verified' || String(facility.status || '').toLowerCase().includes('verified');
+  return [
+    ['Trust Score', fmtPercent(facility.score)],
+    ['Evidence Match', `${Math.min(100, 45 + termCount * 10)}%`],
+    ['Source Coverage', sources.length ? '100%' : '0%'],
+    ['Contactability', hasContact ? '100%' : '50%'],
+    ['Location Completeness', `${Math.round((locationParts / 4) * 100)}%`],
+    ['Human Verification', verified ? '100%' : 'Pending'],
+  ];
+}
+
+function formatBreakdownValue(value, max) {
+  if (typeof value === 'string') return value;
+  return `${fmtCompactScore(value)}${max ? `/${fmtCompactScore(max)}` : ''}`;
+}
+
 function SourceVerificationPanel({ verification }) {
   if (!verification) return null;
   const checks = verification.checks || [];
@@ -180,14 +231,13 @@ function SourceVerificationPanel({ verification }) {
 
 function TrustCard({ facility, serviceLabel, onClose, onMethodology, verification, verifying, onVerifySources }) {
   if (!facility) return null;
-  const raw = facility.score_breakdown || [];
-  const entries = Array.isArray(raw) ? raw.map((x) => [x.label || x.key, x.score || 0, x.max_score]) : Object.entries(raw).map(([k, v]) => [k, v]);
-  const sources = facility.source_urls || [facility.source_url, facility.website].filter(Boolean);
+  const sources = normalizeUrlList(facility.source_urls, facility.source_url, facility.website, facility.source_row?.source_urls, facility.source_row?.websites);
   const specialties = termList(facility.specialties, 12);
   const procedures = termList(facility.procedures, 12);
   const equipment = termList(facility.equipment, 8);
+  const entries = scoreBreakdownEntries(facility, sources, specialties, procedures, equipment);
   const currentVerification = verification?.facility_id === facility.unique_id ? verification : null;
-  return <div className="trustModal" role="dialog" aria-modal="true" aria-label={`Trust Card for ${facility.name}`} onClick={onClose}><aside className="card trust trustSheet" onClick={(e) => e.stopPropagation()}><button className="trustClose" aria-label="Close Trust Card" onClick={onClose}>×</button><div className="trustHero"><div><span className="eyebrow">Facility Trust Card</span><h2>{facility.name}</h2><p>{[facility.city, facility.state, facility.pincode].filter(Boolean).join(', ') || 'Location Pending'}</p></div><div className="scoreBubble"><b>{fmtPercent(facility.score)}</b><span>Trust Score</span></div></div><div className="trustClaim"><span className={`badge ${classForConfidence(displayConfidence(facility))}`}>{displayConfidence(facility)}</span><p><b>Claim:</b> Supports {serviceLabel}.</p><button className="methodLink" onClick={onMethodology}>How Score Works</button></div><div className="trustAgentActions"><button onClick={() => onVerifySources?.('crawl')} disabled={verifying || !sources.length}>{verifying ? 'Verifying…' : 'Verify Source Links'}</button><button onClick={() => onVerifySources?.('agent')} disabled={verifying || !sources.length}>Agent Bricks Review</button></div><SourceVerificationPanel verification={currentVerification} /><div className="trustSection trustEvidenceLead"><EvidencePillGroup title="Specialties" items={specialties} empty="No specialty claims extracted yet." /><EvidencePillGroup title="Procedures" items={procedures} empty="No procedure claims extracted yet." />{equipment.length > 0 && <EvidencePillGroup title="Equipment / Services" items={equipment} empty="" />}{facility.description && <p className="trustDescription">{facility.description.slice(0, 240)}</p>}</div><div className="trustSection"><h3>Score Breakdown</h3><div className="why">{entries.slice(0, 8).map(([k, v, m]) => <div key={k}><b>{fmtCompactScore(v)}{m ? `/${fmtCompactScore(m)}` : ''}</b><span>{humanizeTerm(k)}</span></div>)}</div></div><div className="sources trustSection"><h3>Sources</h3>{sources.slice(0, 3).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>)}{!sources.length && <span>No source URL available yet.</span>}</div><p className="footer"><b>Uncertainty:</b> {(facility.uncertainty_flags || ['Treat extracted claims as claims to verify, not ground truth.']).join('; ')}</p></aside></div>;
+  return <div className="trustModal" role="dialog" aria-modal="true" aria-label={`Trust Card for ${facility.name}`} onClick={onClose}><aside className="card trust trustSheet" onClick={(e) => e.stopPropagation()}><button className="trustClose" aria-label="Close Trust Card" onClick={onClose}>×</button><div className="trustHero"><div><span className="eyebrow">Facility Trust Card</span><h2>{facility.name}</h2><p>{[facility.city, facility.state, facility.pincode].filter(Boolean).join(', ') || 'Location Pending'}</p></div><div className="scoreBubble"><b>{fmtPercent(facility.score)}</b><span>Trust Score</span></div></div><div className="trustClaim"><span className={`badge ${classForConfidence(displayConfidence(facility))}`}>{displayConfidence(facility)}</span><p><b>Claim:</b> Supports {serviceLabel}.</p><button className="methodLink" onClick={onMethodology}>How Score Works</button></div><div className="trustAgentActions"><button onClick={() => onVerifySources?.('crawl')} disabled={verifying || !sources.length}>{verifying ? 'Verifying…' : 'Verify Source Links'}</button><button onClick={() => onVerifySources?.('agent')} disabled={verifying || !sources.length}>Agent Bricks Review</button></div><SourceVerificationPanel verification={currentVerification} /><div className="trustSection trustEvidenceLead"><EvidencePillGroup title="Specialties" items={specialties} empty="No specialty claims extracted yet." /><EvidencePillGroup title="Procedures" items={procedures} empty="No procedure claims extracted yet." />{equipment.length > 0 && <EvidencePillGroup title="Equipment / Services" items={equipment} empty="" />}{facility.description && <p className="trustDescription">{facility.description.slice(0, 240)}</p>}</div><div className="trustSection"><h3>Score Breakdown</h3><div className="why">{entries.slice(0, 8).map(([k, v, m]) => <div key={k}><b>{formatBreakdownValue(v, m)}</b><span>{humanizeTerm(k)}</span></div>)}</div></div><div className="sources trustSection"><h3>Sources</h3>{sources.slice(0, 3).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>)}{!sources.length && <span>No source URL available yet.</span>}</div><p className="footer"><b>Uncertainty:</b> {(facility.uncertainty_flags || ['Treat extracted claims as claims to verify, not ground truth.']).join('; ')}</p></aside></div>;
 }
 
 function MethodologyModal({ onClose }) {
