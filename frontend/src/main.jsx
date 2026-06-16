@@ -102,7 +102,7 @@ function distanceKm(a, b) {
 function AppHeader({ activeTab, setActiveTab, selected }) {
   return <header className="topbar">
     <div className="brandNav">
-      <div className="brandBlock"><div className="brand">Care<span>Signal</span></div><div className="brandSub">Facility Trust Desk - Trust Starts Here</div></div>
+      <div className="brandBlock"><img className="brandLogo" src="/static/caresignal-logo.jpg" alt="CareSignal logo" /><div className="brandText"><div className="brand">Care<span>Signal</span></div><div className="brandSub">Facility Trust Desk - Trust Starts Here</div></div></div>
       <nav className="tabs" aria-label="Main sections">{TABS.map((tab) => <button key={tab.id} className={`${activeTab === tab.id ? 'active' : ''} ${tab.id === 'assistant' ? 'assistantTab' : ''}`.trim()} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav>
     </div>
     <div className="callTop"><b>Digital Call Assistant</b><a href={`tel:${PHONE_TEL}`} aria-label={`Call ${PHONE_DISPLAY}`}>☎ {PHONE_DISPLAY}</a></div>
