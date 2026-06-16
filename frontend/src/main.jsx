@@ -35,6 +35,10 @@ const api = async (path, options) => {
 };
 
 const fmt = (value) => Number(value || 0).toFixed(1);
+const fmtPercent = (value) => {
+  const n = Number(value || 0);
+  return Number.isFinite(n) ? `${Math.round(n * 10)}%` : '0%';
+};
 const fmtCompactScore = (value) => {
   const n = Number(value || 0);
   return Number.isFinite(n) ? n.toFixed(2).replace(/\.?0+$/, '') : '0';
@@ -183,7 +187,7 @@ function TrustCard({ facility, serviceLabel, onClose, onMethodology, verificatio
   const procedures = termList(facility.procedures, 12);
   const equipment = termList(facility.equipment, 8);
   const currentVerification = verification?.facility_id === facility.unique_id ? verification : null;
-  return <div className="trustModal" role="dialog" aria-modal="true" aria-label={`Trust Card for ${facility.name}`} onClick={onClose}><aside className="card trust trustSheet" onClick={(e) => e.stopPropagation()}><button className="trustClose" aria-label="Close Trust Card" onClick={onClose}>×</button><div className="trustHero"><div><span className="eyebrow">Facility Trust Card</span><h2>{facility.name}</h2><p>{[facility.city, facility.state, facility.pincode].filter(Boolean).join(', ') || 'Location Pending'}</p></div><div className="scoreBubble"><b>{fmt(facility.score)}</b><span>/10</span></div></div><div className="trustClaim"><span className={`badge ${classForConfidence(displayConfidence(facility))}`}>{displayConfidence(facility)}</span><p><b>Claim:</b> Supports {serviceLabel}.</p><button className="methodLink" onClick={onMethodology}>How Score Works</button></div><div className="trustAgentActions"><button onClick={() => onVerifySources?.('crawl')} disabled={verifying || !sources.length}>{verifying ? 'Verifying…' : 'Verify Source Links'}</button><button onClick={() => onVerifySources?.('agent')} disabled={verifying || !sources.length}>Agent Bricks Review</button></div><SourceVerificationPanel verification={currentVerification} /><div className="trustSection trustEvidenceLead"><EvidencePillGroup title="Specialties" items={specialties} empty="No specialty claims extracted yet." /><EvidencePillGroup title="Procedures" items={procedures} empty="No procedure claims extracted yet." />{equipment.length > 0 && <EvidencePillGroup title="Equipment / Services" items={equipment} empty="" />}{facility.description && <p className="trustDescription">{facility.description.slice(0, 240)}</p>}</div><div className="trustSection"><h3>Score Breakdown</h3><div className="why">{entries.slice(0, 8).map(([k, v, m]) => <div key={k}><b>{fmtCompactScore(v)}{m ? `/${fmtCompactScore(m)}` : ''}</b><span>{humanizeTerm(k)}</span></div>)}</div></div><div className="sources trustSection"><h3>Sources</h3>{sources.slice(0, 3).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>)}{!sources.length && <span>No source URL available yet.</span>}</div><p className="footer"><b>Uncertainty:</b> {(facility.uncertainty_flags || ['Treat extracted claims as claims to verify, not ground truth.']).join('; ')}</p></aside></div>;
+  return <div className="trustModal" role="dialog" aria-modal="true" aria-label={`Trust Card for ${facility.name}`} onClick={onClose}><aside className="card trust trustSheet" onClick={(e) => e.stopPropagation()}><button className="trustClose" aria-label="Close Trust Card" onClick={onClose}>×</button><div className="trustHero"><div><span className="eyebrow">Facility Trust Card</span><h2>{facility.name}</h2><p>{[facility.city, facility.state, facility.pincode].filter(Boolean).join(', ') || 'Location Pending'}</p></div><div className="scoreBubble"><b>{fmtPercent(facility.score)}</b><span>Trust Score</span></div></div><div className="trustClaim"><span className={`badge ${classForConfidence(displayConfidence(facility))}`}>{displayConfidence(facility)}</span><p><b>Claim:</b> Supports {serviceLabel}.</p><button className="methodLink" onClick={onMethodology}>How Score Works</button></div><div className="trustAgentActions"><button onClick={() => onVerifySources?.('crawl')} disabled={verifying || !sources.length}>{verifying ? 'Verifying…' : 'Verify Source Links'}</button><button onClick={() => onVerifySources?.('agent')} disabled={verifying || !sources.length}>Agent Bricks Review</button></div><SourceVerificationPanel verification={currentVerification} /><div className="trustSection trustEvidenceLead"><EvidencePillGroup title="Specialties" items={specialties} empty="No specialty claims extracted yet." /><EvidencePillGroup title="Procedures" items={procedures} empty="No procedure claims extracted yet." />{equipment.length > 0 && <EvidencePillGroup title="Equipment / Services" items={equipment} empty="" />}{facility.description && <p className="trustDescription">{facility.description.slice(0, 240)}</p>}</div><div className="trustSection"><h3>Score Breakdown</h3><div className="why">{entries.slice(0, 8).map(([k, v, m]) => <div key={k}><b>{fmtCompactScore(v)}{m ? `/${fmtCompactScore(m)}` : ''}</b><span>{humanizeTerm(k)}</span></div>)}</div></div><div className="sources trustSection"><h3>Sources</h3>{sources.slice(0, 3).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>)}{!sources.length && <span>No source URL available yet.</span>}</div><p className="footer"><b>Uncertainty:</b> {(facility.uncertainty_flags || ['Treat extracted claims as claims to verify, not ground truth.']).join('; ')}</p></aside></div>;
 }
 
 function MethodologyModal({ onClose }) {
@@ -301,7 +305,8 @@ function VerificationForm({ facility, service, serviceLabel, facilities, locatio
   const saveOverride = async () => {
     setOverrideMessage('');
     const oldScore = Number(facility.score || 0);
-    const newScore = Number(overrideScore || oldScore);
+    const rawScore = Number(overrideScore || oldScore);
+    const newScore = rawScore > 10 ? rawScore / 10 : rawScore;
     await saveAction('override', { old_score: oldScore, new_score: newScore, justification: overrideReason });
     setOverrideMessage('Score override saved.');
   };
@@ -323,7 +328,7 @@ function VerificationForm({ facility, service, serviceLabel, facilities, locatio
     <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add note, e.g. This facility needs NICU verification" />
     <div className="assistantActions reviewSubmitRow"><button onClick={submit}>Submit Review</button></div>
     {submitMessage && <p className="successMessage">{submitMessage}</p>}
-    <div className="inlineActionGroup scoreOverrideGroup"><input value={overrideScore} onChange={(e) => setOverrideScore(e.target.value)} placeholder={`Override score, current ${fmt(facility.score)}`} /><button onClick={saveOverride}>Save Score Override</button></div>
+    <div className="inlineActionGroup scoreOverrideGroup"><input value={overrideScore} onChange={(e) => setOverrideScore(e.target.value)} placeholder={`Override score %, current ${fmtPercent(facility.score)}`} /><button onClick={saveOverride}>Save Score Override</button></div>
     <textarea className="overrideReasonBox" value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} placeholder="Reason for score override" />
     {overrideMessage && <p className="successMessage compactSuccess">{overrideMessage}</p>}
     <div className="inlineActionGroup scenarioGroup"><input value={scenarioTitle} onChange={(e) => setScenarioTitle(e.target.value)} placeholder={`Scenario, e.g. ${serviceLabel} options in ${location || 'India'}`} /><button onClick={saveScenario}>Save Scenarios</button></div>
@@ -450,7 +455,7 @@ function SelectedFacilityPanel({ selected, onOpenTrust, onAddShortlist, onViewSh
   return <section className="card selectedFacilityPanel">
     <div className="cardTitle"><h2>Selected Facility</h2></div>
     <p className="infoDateLine"><b>Information As Of:</b> {formatInfoDate(latestDate)}</p>
-    {selected ? <div className="selectedFacilitySummary"><b>{selected.name}</b><span>{[selected.city, selected.state, selected.pincode].filter(Boolean).join(', ')}</span><small>Score {fmt(selected.score)}/10 • {selected.trust_tier || selected.status || 'Review Ready'}</small></div> : <p className="empty">Select a facility to review.</p>}
+    {selected ? <div className="selectedFacilitySummary"><b>{selected.name}</b><span>{[selected.city, selected.state, selected.pincode].filter(Boolean).join(', ')}</span><small>Score {fmtPercent(selected.score)} • {selected.trust_tier || selected.status || 'Review Ready'}</small></div> : <p className="empty">Select a facility to review.</p>}
     <div className="trustReviewButtonRow"><button className="trustOpenWide" onClick={() => onOpenTrust()} disabled={!selected}>Open Trust Card</button><button className="trustOpenWide shortlistInline" onClick={onAddShortlist} disabled={!selected}>Add to Shortlist</button><button className="trustOpenWide shortlistInline" onClick={onViewShortlists} disabled={!shortlistCount}>View Shortlist ({shortlistCount})</button></div>
     <p className="empty">Saved Actions: {userActionsCount} • Scenarios: {scenarioCount}</p>
   </section>;
