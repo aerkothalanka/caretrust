@@ -282,6 +282,8 @@ function VerificationForm({ facility, service, serviceLabel, facilities, locatio
   const [overrideReason, setOverrideReason] = useState('Local contact confirmed service capacity.');
   const [scenarioTitle, setScenarioTitle] = useState('');
   const [submitMessage, setSubmitMessage] = useState('');
+  const [overrideMessage, setOverrideMessage] = useState('');
+  const [scenarioMessage, setScenarioMessage] = useState('');
   if (!facility) return null;
   const currentVerification = verification?.facility_id === facility.unique_id ? verification : null;
   const saveAction = async (action_type, action_data = {}) => {
@@ -296,9 +298,37 @@ function VerificationForm({ facility, service, serviceLabel, facilities, locatio
     setSubmitMessage('Review has been submitted.');
     await onHistory?.();
   };
-  const saveOverride = async () => { const oldScore = Number(facility.score || 0); const newScore = Number(overrideScore || oldScore); await saveAction('override', { old_score: oldScore, new_score: newScore, justification: overrideReason }); };
-  const saveScenario = async () => { const ids = (facilities || []).slice(0, 8).map((f) => f.unique_id); await api('/api/scenario-shortlists', { method: 'POST', body: JSON.stringify({ user_id: 'CareSignal demo user', location, service, facility_ids: ids, title: scenarioTitle || `${serviceLabel} options in ${location || 'India'}`, notes }) }); await onHistory?.(); };
-  return <section className="card verification trustReviewActions"><div className="cardTitle"><h2>Trust Review Actions</h2><span>{facility.name}</span></div><p>Information shown here is dated. Use Verify Sources, Agent Bricks Review, or Call Facility to refresh what the next user sees.</p><div className="trustAgentActions reviewActions"><button onClick={() => onVerifySources?.('crawl')} disabled={verifying}>{verifying ? 'Verifying…' : 'Verify Source Links'}</button><button onClick={() => onVerifySources?.('agent')} disabled={verifying}>Agent Bricks Review</button><button onClick={() => onCallFacility?.()} disabled={callingFacility}>{callingFacility ? 'Calling…' : 'Call Facility (Demo)'}</button></div><SourceVerificationPanel verification={currentVerification} /><CallNotesPanel result={callResult?.facility_id === facility.unique_id ? callResult : null} /><div className="checklist"><label><input type="checkbox" /> Service Currently Available</label><label><input type="checkbox" /> Equipment/Facilities Confirmed</label><label><input type="checkbox" /> Specialists/Referral Pathway Confirmed</label></div><p className="reviewStatusLine"><b>Review Status:</b> Verified</p><textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add note, e.g. This facility needs NICU verification" /><div className="assistantActions"><button onClick={submit}>Submit Review</button></div>{submitMessage && <p className="successMessage">{submitMessage}</p>}<input value={overrideScore} onChange={(e) => setOverrideScore(e.target.value)} placeholder={`Override score, current ${fmt(facility.score)}`} /><textarea value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} /><button onClick={saveOverride}>Save Score Override</button><input value={scenarioTitle} onChange={(e) => setScenarioTitle(e.target.value)} placeholder={`Scenario name, e.g. ${serviceLabel} options in ${location || 'India'}`} /><button onClick={saveScenario}>Save Scenario Shortlist</button></section>;
+  const saveOverride = async () => {
+    setOverrideMessage('');
+    const oldScore = Number(facility.score || 0);
+    const newScore = Number(overrideScore || oldScore);
+    await saveAction('override', { old_score: oldScore, new_score: newScore, justification: overrideReason });
+    setOverrideMessage('Score override saved.');
+  };
+  const saveScenario = async () => {
+    setScenarioMessage('');
+    const ids = (facilities || []).slice(0, 8).map((f) => f.unique_id);
+    await api('/api/scenario-shortlists', { method: 'POST', body: JSON.stringify({ user_id: 'CareSignal demo user', location, service, facility_ids: ids, title: scenarioTitle || `${serviceLabel} options in ${location || 'India'}`, notes }) });
+    await onHistory?.();
+    setScenarioMessage('Scenario saved.');
+  };
+  return <section className="card verification trustReviewActions">
+    <div className="cardTitle"><h2>Trust Review Actions</h2></div>
+    <p>Information shown here is dated. Use Verify Sources, Agent Bricks Review, or Call Facility to refresh what the next user sees.</p>
+    <div className="trustAgentActions reviewActions"><button onClick={() => onVerifySources?.('crawl')} disabled={verifying}>{verifying ? 'Verifying…' : 'Verify Source Links'}</button><button onClick={() => onVerifySources?.('agent')} disabled={verifying}>Agent Bricks Review</button><button onClick={() => onCallFacility?.()} disabled={callingFacility}>{callingFacility ? 'Calling…' : 'Call Facility (Demo)'}</button></div>
+    <SourceVerificationPanel verification={currentVerification} />
+    <CallNotesPanel result={callResult?.facility_id === facility.unique_id ? callResult : null} />
+    <div className="checklist"><label><input type="checkbox" /> Service Currently Available</label><label><input type="checkbox" /> Equipment/Facilities Confirmed</label><label><input type="checkbox" /> Specialists/Referral Pathway Confirmed</label></div>
+    <p className="reviewStatusLine"><b>Review Status:</b> Verified</p>
+    <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add note, e.g. This facility needs NICU verification" />
+    <div className="assistantActions reviewSubmitRow"><button onClick={submit}>Submit Review</button></div>
+    {submitMessage && <p className="successMessage">{submitMessage}</p>}
+    <div className="inlineActionGroup scoreOverrideGroup"><input value={overrideScore} onChange={(e) => setOverrideScore(e.target.value)} placeholder={`Override score, current ${fmt(facility.score)}`} /><button onClick={saveOverride}>Save Score Override</button></div>
+    <textarea className="overrideReasonBox" value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} placeholder="Reason for score override" />
+    {overrideMessage && <p className="successMessage compactSuccess">{overrideMessage}</p>}
+    <div className="inlineActionGroup scenarioGroup"><input value={scenarioTitle} onChange={(e) => setScenarioTitle(e.target.value)} placeholder={`Scenario, e.g. ${serviceLabel} options in ${location || 'India'}`} /><button onClick={saveScenario}>Save Scenarios</button></div>
+    {scenarioMessage && <p className="successMessage compactSuccess">{scenarioMessage}</p>}
+  </section>;
 }
 
 function CallNotesPanel({ result }) {
@@ -379,8 +409,18 @@ function FacilityInfoTimeline({ actions, facility }) {
   return <section className="card infoTimeline"><div className="cardTitle"><h2>Latest Facility Information</h2><span>As Of {formatInfoDate(latestInfoDate(rows, facility))}</span></div><p>Saved in Lakebase so future users see recent source checks, Agent Bricks reviews, reviews, overrides, and call notes.</p><div className="infoTimelineList">{rows.slice(0, 6).map((action) => { const data = action.action_data || {}; const title = action.action_type === 'call_note' ? 'Call Notes' : data.mode === 'agent' ? 'Agent Bricks Review' : action.action_type === 'source_verification' ? 'Verified Sources' : humanizeTerm(action.action_type); const detail = data.summary || data.notes || data.justification || data.status || 'Saved update'; return <div key={action.action_id || `${action.action_type}-${action.created_at}`} className="infoTimelineItem"><b>{title}</b><small>Information As Of {formatInfoDate(data.information_date || action.updated_at || action.created_at)}</small><span>{detail}</span>{Array.isArray(data.verified_claims) && data.verified_claims.length > 0 && <em>{data.verified_claims.slice(0, 2).join(' • ')}</em>}</div>; })}{!rows.length && <p className="empty">No recent updates yet. Use Verify Sources, Agent Bricks Review, or Call Facility to refresh this facility.</p>}</div></section>;
 }
 
-function SelectedFacilityPanel({ selected, facilities, onSelectFacility, onOpenTrust, onAddShortlist, onViewShortlists, shortlistCount, userActionsCount, scenarioCount, latestDate }) {
-  return <section className="card selectedFacilityPanel"><div className="cardTitle"><h2>Selected Facility</h2><span>{selected?.name || 'None selected'}</span></div><p className="infoDateLine"><b>Information As Of:</b> {formatInfoDate(latestDate)}</p><label className="facilitySelectLabel"><span>Facility</span><select value={selected?.unique_id || ''} onChange={(e) => onSelectFacility(e.target.value)}><option value="">Select Facility</option>{facilities.map((f) => <option key={f.unique_id} value={f.unique_id}>{f.name}</option>)}</select></label><button className="trustOpenWide" onClick={() => onOpenTrust()} disabled={!selected}>Open Trust Card</button><button className="trustOpenWide shortlistInline" onClick={onAddShortlist} disabled={!selected}>Add To Shortlist</button><button className="trustOpenWide shortlistInline" onClick={onViewShortlists} disabled={!shortlistCount}>View Shortlists ({shortlistCount})</button><p className="empty">Saved Actions: {userActionsCount} • Scenarios: {scenarioCount}</p></section>;
+function SelectedFacilityPanel({ selected, onOpenTrust, onAddShortlist, onViewShortlists, shortlistCount, userActionsCount, scenarioCount, latestDate }) {
+  return <section className="card selectedFacilityPanel">
+    <div className="cardTitle"><h2>Selected Facility</h2></div>
+    <p className="infoDateLine"><b>Information As Of:</b> {formatInfoDate(latestDate)}</p>
+    {selected ? <div className="selectedFacilitySummary"><b>{selected.name}</b><span>{[selected.city, selected.state, selected.pincode].filter(Boolean).join(', ')}</span><small>Score {fmt(selected.score)}/10 • {selected.trust_tier || selected.status || 'Review Ready'}</small></div> : <p className="empty">Select a facility to review.</p>}
+    <div className="trustReviewButtonRow"><button className="trustOpenWide" onClick={() => onOpenTrust()} disabled={!selected}>Open Trust Card</button><button className="trustOpenWide shortlistInline" onClick={onAddShortlist} disabled={!selected}>Add to Shortlist</button><button className="trustOpenWide shortlistInline" onClick={onViewShortlists} disabled={!shortlistCount}>View Shortlist ({shortlistCount})</button></div>
+    <p className="empty">Saved Actions: {userActionsCount} • Scenarios: {scenarioCount}</p>
+  </section>;
+}
+
+function TrustReviewFacilityFilter({ selected, facilities, onSelectFacility }) {
+  return <section className="trustReviewFacilityFilter"><label className="facilitySelectLabel"><span>Facility</span><select value={selected?.unique_id || ''} onChange={(e) => onSelectFacility(e.target.value)}><option value="">Select Facility</option>{facilities.map((f) => <option key={f.unique_id} value={f.unique_id}>{f.name}</option>)}</select></label></section>;
 }
 
 function AssistantPanel({ service, serviceLabel, selected }) {
@@ -446,11 +486,18 @@ function App() {
     <AppHeader activeTab={activeTab} setActiveTab={setActiveTab} selected={selected} />
     <main className="main">
       <section className="missionStrip">CareSignal helps people find trusted facilities for healthier lives</section>
-      {activeTab !== 'verification' && <section className="hero filtersOnly"><FilterBar filters={filters} values={{ country, state, city, pincode, services: activeServices, radius }} setters={{ setCountry, setState, setCity, setPincode, setServices: setSelectedServices, setRadius }} services={services} /></section>}
+      {activeTab !== 'verification' && activeTab !== 'assistant' && <section className="hero filtersOnly"><FilterBar filters={filters} values={{ country, state, city, pincode, services: activeServices, radius }} setters={{ setCountry, setState, setCity, setPincode, setServices: setSelectedServices, setRadius }} services={services} /></section>}
       {activeTab === 'explorer' && <div className="grid single"><FacilityTable facilities={displayFacilities} selected={selected} setSelected={setSelected} onOpenTrust={openTrust} onOpenReview={openReview} /></div>}
       {activeTab === 'map' && <div className="grid single"><RadiusMap facilities={displayFacilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} onOpenTrust={openTrust} /></div>}
-      {activeTab === 'verification' && <div className="grid trustReviewGrid"><SelectedFacilityPanel selected={selected} facilities={displayFacilities} onSelectFacility={selectFacilityForReview} onOpenTrust={openTrust} onAddShortlist={addShortlist} onViewShortlists={() => setActiveTab('shortlists')} shortlistCount={shortlists.length + scenarioShortlists.length} userActionsCount={userActions.length} scenarioCount={scenarioShortlists.length} latestDate={latestInfoDate(facilityUpdates, selected || {})} /><VerificationForm facility={selected} service={service} serviceLabel={serviceLabel} facilities={displayFacilities} location={city || state || country || 'India'} onVerified={onVerified} onHistory={refreshHistory} verification={trustVerification} verifying={trustVerifying} onVerifySources={verifyTrustSources} callResult={callResult} callingFacility={callingFacility} onCallFacility={callFacilityDemo} /><FacilityInfoTimeline actions={facilityUpdates} facility={selected || {}} /><RecentHistory title="Recent User Actions" items={userActions} empty="No persisted notes, overrides, or review decisions yet." /><RecentHistory title="Saved Scenarios" items={scenarioShortlists} empty="No saved scenarios yet." /><RecentHistory title="Recent Verifications" items={recentVerifications} empty="No verification history yet." /></div>}
-      {activeTab === 'assistant' && <div className="grid single assistantOnlyGrid"><AssistantPanel service={service} serviceLabel={serviceLabel} selected={selected} /></div>}
+      {activeTab === 'verification' && <>
+        <div className="trustReviewAccentLine" />
+        <TrustReviewFacilityFilter selected={selected} facilities={displayFacilities} onSelectFacility={selectFacilityForReview} />
+        <div className="grid trustReviewGrid">
+          <div className="trustReviewColumn trustReviewLeftColumn"><SelectedFacilityPanel selected={selected} onOpenTrust={openTrust} onAddShortlist={addShortlist} onViewShortlists={() => setActiveTab('shortlists')} shortlistCount={shortlists.length + scenarioShortlists.length} userActionsCount={userActions.length} scenarioCount={scenarioShortlists.length} latestDate={latestInfoDate(facilityUpdates, selected || {})} /><RecentHistory title="Recent Verifications" items={recentVerifications} empty="No verification history yet." /><FacilityInfoTimeline actions={facilityUpdates} facility={selected || {}} /></div>
+          <div className="trustReviewColumn trustReviewRightColumn"><VerificationForm facility={selected} service={service} serviceLabel={serviceLabel} facilities={displayFacilities} location={city || state || country || 'India'} onVerified={onVerified} onHistory={refreshHistory} verification={trustVerification} verifying={trustVerifying} onVerifySources={verifyTrustSources} callResult={callResult} callingFacility={callingFacility} onCallFacility={callFacilityDemo} /><RecentHistory title="Recent User Actions" items={userActions} empty="No persisted notes, overrides, or review decisions yet." /><RecentHistory title="Saved Scenarios" items={scenarioShortlists} empty="No saved scenarios yet." /></div>
+        </div>
+      </>}
+      {activeTab === 'assistant'  && <div className="grid single assistantOnlyGrid"><AssistantPanel service={service} serviceLabel={serviceLabel} selected={selected} /></div>}
       {activeTab === 'shortlists' && <div className="grid"><Shortlists selected={selected} shortlists={[...scenarioShortlists.map((x) => ({ ...x, name: x.title || x.location, meta: `${humanizeTerm(x.service)} • ${(x.facility_ids || []).length} facilities` })), ...shortlists]} onAdd={addShortlist} /><ServiceTable services={services} /></div>}
     </main>
     {trustOpen && <TrustCard facility={selected} serviceLabel={serviceLabel} verification={trustVerification} verifying={trustVerifying} onVerifySources={verifyTrustSources} onClose={() => setTrustOpen(false)} onMethodology={() => setMethodOpen(true)} />}
