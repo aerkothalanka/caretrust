@@ -126,33 +126,20 @@ function FilterBar({ filters, values, setters, services }) {
   </section>;
 }
 
-function DemoStrip({ setActiveTab, openTrust, shortlistCount, voiceStatus }) {
-  const live = voiceStatus?.gemini?.enabled ? 'Gemini Live active' : 'Deterministic fallback ready';
-  return <section className="demoStrip" aria-label="Judge demo path">
-    <button onClick={() => setActiveTab('explorer')}><b>1</b><span>Find trusted facility</span></button>
-    <button onClick={openTrust}><b>2</b><span>Open evidence Trust Card</span></button>
-    <button onClick={() => setActiveTab('assistant')}><b>3</b><span>Call or ask the agent</span></button>
-    <div className="demoStatus"><span>Phone agent active</span><span>{live}</span><span>Shortlisted: {shortlistCount}</span></div>
-  </section>;
-}
-
-function Metrics({ facilities, selected, radius, shortlistCount }) {
+function Metrics({ facilities, radius, shortlistCount }) {
   const verified = facilities.filter((f) => displayConfidence(f) === 'Human verified').length;
-  const needsVerification = facilities.filter(hasUncertainty).length;
-  return <div className="metricrow kpiRow" aria-label="CareTrust KPI cards">
-    <div className="metric kpiCard"><small>Visible facilities</small><strong>{facilities.length}</strong></div>
-    <div className="metric kpiCard"><small>Needs verification</small><strong>{needsVerification}</strong></div>
+  return <div className="metricrow kpiRow conciseKpis" aria-label="CareTrust KPI cards">
+    <div className="metric kpiCard"><small>Facilities</small><strong>{facilities.length}</strong></div>
     <div className="metric kpiCard"><small>Top score / 10</small><strong>{fmt(facilities[0]?.score)}</strong></div>
-    <div className="metric kpiCard"><small>Human verified</small><strong>{verified}</strong></div>
+    <div className="metric kpiCard"><small>Verified</small><strong>{verified}</strong></div>
     <div className="metric kpiCard"><small>Shortlisted</small><strong>{shortlistCount}</strong></div>
-    <div className="metric kpiCard"><small>Map radius</small><strong>{radius} km</strong></div>
-    <div className="metric kpiCard wide"><small>Radius center</small><strong>{selected?.name || 'None'}</strong></div>
+    <div className="metric kpiCard"><small>Radius</small><strong>{radius} km</strong></div>
   </div>;
 }
 
 function FacilityTable({ facilities, selected, setSelected, onOpenTrust }) {
   const choose = (f) => { setSelected(f); onOpenTrust(f); };
-  return <section className="card rankings"><div className="cardTitle"><h2>Ranked facilities</h2><span>Click View for specialties, procedures, evidence, and score details</span></div><table className="rank"><thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Score</th><th>Status</th><th>Trust</th></tr></thead><tbody>{facilities.map((f, i) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => choose(f)}><td>{i + 1}</td><td><b>{f.name}</b>{hasUncertainty(f) && <small className="rowHint">Needs verification</small>}</td><td>{[f.city, f.state, f.pincode].filter(Boolean).join(', ')}</td><td><b>{fmt(f.score)}</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{displayConfidence(f)}</span></td><td><button className="trustOpenBtn" onClick={(e) => { e.stopPropagation(); choose(f); }}>View</button></td></tr>)}</tbody></table>{!facilities.length && <p className="empty">No facilities match these filters. Try All claims, All states, or a different service.</p>}</section>;
+  return <section className="card rankings"><div className="cardTitle"><h2>Ranked facilities</h2><span>Click View for evidence and score details</span></div><table className="rank"><thead><tr><th>Rank</th><th>Facility</th><th>Location</th><th>Score</th><th>Status</th><th>Trust</th></tr></thead><tbody>{facilities.map((f, i) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => choose(f)}><td>{i + 1}</td><td><b>{f.name}</b></td><td>{[f.city, f.state, f.pincode].filter(Boolean).join(', ')}</td><td><b>{fmt(f.score)}</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{displayConfidence(f)}</span></td><td><button className="trustOpenBtn" onClick={(e) => { e.stopPropagation(); choose(f); }}>View</button></td></tr>)}</tbody></table>{!facilities.length && <p className="empty">No facilities match these filters. Try All claims, All states, or a different service.</p>}</section>;
 }
 
 function TrustCard({ facility, serviceLabel, onClose, onMethodology }) {
@@ -259,7 +246,6 @@ function App() {
     <AppHeader activeTab={activeTab} setActiveTab={setActiveTab} />
     <main className="main">
       <section className="hero filtersOnly"><FilterBar filters={filters} values={{ country, state, city, pincode, service, radius, evidenceFocus }} setters={{ setCountry, setState, setCity, setPincode, setService, setRadius, setEvidenceFocus }} services={services} /></section>
-      <DemoStrip setActiveTab={setActiveTab} openTrust={() => openTrust()} shortlistCount={shortlists.length} voiceStatus={voiceStatus} />
       <Metrics facilities={displayFacilities} selected={selected} radius={radius} shortlistCount={shortlists.length} />
       {activeTab === 'explorer' && <div className="grid single"><FacilityTable facilities={displayFacilities} selected={selected} setSelected={setSelected} onOpenTrust={openTrust} /></div>}
       {activeTab === 'map' && <div className="grid single"><RadiusMap facilities={displayFacilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} onOpenTrust={openTrust} /></div>}
