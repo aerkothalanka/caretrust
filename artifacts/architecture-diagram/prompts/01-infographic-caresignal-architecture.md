@@ -1,15 +1,9 @@
 ---
-type: framework infographic
-style: polished enterprise demo slide
-palette: white, deep navy, Databricks orange, healthcare teal, soft blue
+type: executive architecture infographic
+style: minimal enterprise demo slide
+palette: white, slate navy, Databricks orange, healthcare teal
 aspect: 16:9
-source: Databricks notebooks + CareSignal app code + Claude Code design review
+source: CareSignal Databricks pipeline and app code
 ---
 
-Create a professional hackathon-demo architecture slide titled "CareSignal Architecture".
-Use only three major swim lanes:
-1. Data Layer — raw facility/location/health data, cleansing & enrichment, gold trust layer, Lakebase app tables.
-2. Agent Layer — explainable trust scoring, planner chat assistant, voice/call assistant, human verification feedback.
-3. Application Layer — Databricks App, React experience, trust cards, map + radius, verification + shortlists.
-
-Keep the diagram executive-friendly. Do not include notebook filenames, full table paths, API routes, warehouse IDs, or debug notes. Use concise labels and minimal arrows. Emphasize that data becomes explainable decisions and verified planning workflows.
+Create a low-clutter professional architecture slide for CareSignal. Show exactly three primary cards: Data Layer, Agent Layer, Application Layer. Use a single left-to-right flow. Avoid notebook filenames, full table names, API routes, warehouse IDs, and detailed scoring internals. Include concise concepts only: raw sources, cleansing/enrichment, gold/Lakebase data, trust scoring, planner assistant, voice agent, human verification, Databricks App UI, Trust Cards, map, chat, phone. Make it suitable for a hackathon demo slide.

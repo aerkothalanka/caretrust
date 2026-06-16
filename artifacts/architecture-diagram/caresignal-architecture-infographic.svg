@@ -1,84 +1,91 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
-<defs><filter id="cardShadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#0B1220" flood-opacity="0.10"/></filter><filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#0B1220" flood-opacity="0.08"/></filter><linearGradient id="titleGrad" x1="0" x2="1"><stop offset="0" stop-color="#FF5F1F"/><stop offset="0.55" stop-color="#0F9F8F"/><stop offset="1" stop-color="#2F6BFF"/></linearGradient><marker id="arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#334155"/></marker><marker id="arrowTeal" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto" markerUnits="strokeWidth"><path d="M2,2 L12,7 L2,12 z" fill="#0F9F8F"/></marker></defs>
-<rect width="1920" height="1080" fill="#F8FAFC"/><circle cx="1760" cy="-90" r="260" fill="#FFF1E8"/><circle cx="-90" cy="980" r="260" fill="#EDF4FF"/>
-<text x="90" y="92" font-family="Inter, Arial, sans-serif" font-size="54" font-weight="850" fill="#0B1220">CareSignal Architecture</text>
-<text x="92" y="132" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="500" fill="#64748B">Evidence-backed facility planning on Databricks: trusted data → explainable agents → demo-ready app experience</text>
-<rect x="90" y="158" width="1740" height="7" rx="4" fill="url(#titleGrad)"/>
-<rect x="1540" y="58" width="290" height="58" rx="18" fill="#FFFFFF" stroke="#CBD5E1" filter="url(#softShadow)"/><path d="M1568 87 L1605 68 L1642 87 L1605 106 Z" fill="none" stroke="#FF5F1F" stroke-width="4" stroke-linejoin="round"/><path d="M1580 87 L1605 100 L1630 87" fill="none" stroke="#FF5F1F" stroke-width="4" stroke-linecap="round"/><text x="1657" y="92" font-family="Inter, Arial" font-size="22" font-weight="800" fill="#0B1220">Databricks App</text>
-<rect x="70" y="205" width="1780" height="238" rx="30" fill="#F6FAFF" stroke="#2F6BFF" stroke-width="2.5"/>
-<rect x="70" y="205" width="14" height="238" rx="7" fill="#2F6BFF"/>
-<text x="105" y="253" font-family="Inter, Arial" font-size="30" font-weight="850" fill="#0B1220">Data Layer</text>
-<rect x="70" y="475" width="1780" height="238" rx="30" fill="#F4FEFB" stroke="#0F9F8F" stroke-width="2.5"/>
-<rect x="70" y="475" width="14" height="238" rx="7" fill="#0F9F8F"/>
-<text x="105" y="523" font-family="Inter, Arial" font-size="30" font-weight="850" fill="#0B1220">Agent Layer</text>
-<rect x="70" y="745" width="1780" height="240" rx="30" fill="#FFF9F5" stroke="#FF5F1F" stroke-width="2.5"/>
-<rect x="70" y="745" width="14" height="240" rx="7" fill="#FF5F1F"/>
-<text x="105" y="793" font-family="Inter, Arial" font-size="30" font-weight="850" fill="#0B1220">Application Layer</text>
-<rect x="265" y="262" width="330" height="116" rx="24" fill="#FFFFFF" stroke="#2F6BFF" stroke-width="2" filter="url(#cardShadow)"/>
-<circle cx="299" cy="296" r="17" fill="#2F6BFF"/><text x="299" y="303" text-anchor="middle" font-family="Inter, Arial" font-size="15" font-weight="900" fill="white">1</text>
-<text x="330" y="303" font-family="Inter, Arial" font-size="23" font-weight="850" fill="#172033">Raw Sources</text>
-<text x="297" y="342" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Facility + location data</text>
-<text x="297" y="368" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Public health context</text>
-<rect x="695" y="262" width="330" height="116" rx="24" fill="#FFFFFF" stroke="#0F9F8F" stroke-width="2" filter="url(#cardShadow)"/>
-<circle cx="729" cy="296" r="17" fill="#0F9F8F"/><text x="729" y="303" text-anchor="middle" font-family="Inter, Arial" font-size="15" font-weight="900" fill="white">2</text>
-<text x="760" y="303" font-family="Inter, Arial" font-size="23" font-weight="850" fill="#172033">Quality Pipeline</text>
-<text x="727" y="342" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Clean + standardize records</text>
-<text x="727" y="368" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Enrich service evidence</text>
-<rect x="1125" y="262" width="330" height="116" rx="24" fill="#FFFFFF" stroke="#7C3AED" stroke-width="2" filter="url(#cardShadow)"/>
-<circle cx="1159" cy="296" r="17" fill="#7C3AED"/><text x="1159" y="303" text-anchor="middle" font-family="Inter, Arial" font-size="15" font-weight="900" fill="white">3</text>
-<text x="1190" y="303" font-family="Inter, Arial" font-size="23" font-weight="850" fill="#172033">Trusted Data Products</text>
-<text x="1157" y="342" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Gold trust layer</text>
-<text x="1157" y="368" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Lakebase app tables</text>
-<path d="M595,320 C645.0,320 645.0,320 695,320" fill="none" stroke="#334155" stroke-width="3.2" marker-end="url(#arrow)"/>
-<path d="M1025,320 C1075.0,320 1075.0,320 1125,320" fill="none" stroke="#334155" stroke-width="3.2" marker-end="url(#arrow)"/>
-<rect x="1515" y="254" width="185" height="68" rx="18" fill="#FFFFFF" stroke="#7C3AED" stroke-width="1.8"/>
-<text x="1535" y="284" font-family="Inter, Arial" font-size="23" font-weight="850" fill="#7C3AED">7</text><text x="1535" y="307" font-family="Inter, Arial" font-size="13" font-weight="700" fill="#64748B">service groups</text>
-<rect x="1515" y="335" width="185" height="68" rx="18" fill="#FFFFFF" stroke="#0F9F8F" stroke-width="1.8"/>
-<text x="1535" y="365" font-family="Inter, Arial" font-size="23" font-weight="850" fill="#0F9F8F">0–10</text><text x="1535" y="388" font-family="Inter, Arial" font-size="13" font-weight="700" fill="#64748B">trust score lens</text>
-<rect x="862" y="421" width="196" height="34" rx="17" fill="#FFFFFF" stroke="#CBD5E1"/><text x="960" y="443" text-anchor="middle" font-family="Inter, Arial" font-size="13" font-weight="850" fill="#64748B">trusted records</text>
-<line x1="960" y1="378" x2="960" y2="532" stroke="#334155" stroke-width="3.4" marker-end="url(#arrow)"/>
-<rect x="250" y="532" width="330" height="116" rx="24" fill="#FFFFFF" stroke="#0F9F8F" stroke-width="2" filter="url(#cardShadow)"/>
-<circle cx="284" cy="566" r="17" fill="#0F9F8F"/><text x="284" y="573" text-anchor="middle" font-family="Inter, Arial" font-size="15" font-weight="900" fill="white">✓</text>
-<text x="315" y="573" font-family="Inter, Arial" font-size="23" font-weight="850" fill="#172033">Trust Scoring</text>
-<text x="282" y="612" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Capability + evidence signals</text>
-<text x="282" y="638" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Uncertainty calibration</text>
-<rect x="655" y="532" width="330" height="116" rx="24" fill="#FFFFFF" stroke="#2F6BFF" stroke-width="2" filter="url(#cardShadow)"/>
-<circle cx="689" cy="566" r="17" fill="#2F6BFF"/><text x="689" y="573" text-anchor="middle" font-family="Inter, Arial" font-size="15" font-weight="900" fill="white">AI</text>
-<text x="720" y="573" font-family="Inter, Arial" font-size="23" font-weight="850" fill="#172033">Planner Assistant</text>
-<text x="687" y="612" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Explain rankings</text>
-<text x="687" y="638" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Recommend next steps</text>
-<rect x="1060" y="532" width="330" height="116" rx="24" fill="#FFFFFF" stroke="#168447" stroke-width="2" filter="url(#cardShadow)"/>
-<circle cx="1094" cy="566" r="17" fill="#168447"/><text x="1094" y="573" text-anchor="middle" font-family="Inter, Arial" font-size="15" font-weight="900" fill="white">☎</text>
-<text x="1125" y="573" font-family="Inter, Arial" font-size="23" font-weight="850" fill="#172033">Voice + Phone Agent</text>
-<text x="1092" y="612" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Phone-ready summaries</text>
-<text x="1092" y="638" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Same evidence path</text>
-<rect x="1465" y="532" width="300" height="116" rx="24" fill="#FFFFFF" stroke="#F59E0B" stroke-width="2" filter="url(#cardShadow)"/>
-<circle cx="1499" cy="566" r="17" fill="#F59E0B"/><text x="1499" y="573" text-anchor="middle" font-family="Inter, Arial" font-size="15" font-weight="900" fill="white">H</text>
-<text x="1530" y="573" font-family="Inter, Arial" font-size="23" font-weight="850" fill="#172033">Human Verification</text>
-<text x="1497" y="612" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Confirm claims</text>
-<text x="1497" y="638" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Improve confidence</text>
-<path d="M580,590 C617.5,590 617.5,590 655,590" fill="none" stroke="#334155" stroke-width="3.2" marker-end="url(#arrow)"/>
-<path d="M985,590 C1022.5,590 1022.5,590 1060,590" fill="none" stroke="#334155" stroke-width="3.2" marker-end="url(#arrow)"/>
-<path d="M1390,590 C1427.5,590 1427.5,590 1465,590" fill="none" stroke="#334155" stroke-width="3.2" marker-end="url(#arrow)"/>
-<rect x="852" y="691" width="216" height="34" rx="17" fill="#FFFFFF" stroke="#CBD5E1"/><text x="960" y="713" text-anchor="middle" font-family="Inter, Arial" font-size="13" font-weight="850" fill="#64748B">explainable actions</text>
-<line x1="960" y1="648" x2="960" y2="802" stroke="#334155" stroke-width="3.4" marker-end="url(#arrow)"/>
-<rect x="255" y="802" width="390" height="120" rx="24" fill="#FFFFFF" stroke="#FF5F1F" stroke-width="2" filter="url(#cardShadow)"/>
-<circle cx="289" cy="836" r="17" fill="#FF5F1F"/><text x="289" y="843" text-anchor="middle" font-family="Inter, Arial" font-size="15" font-weight="900" fill="white">UI</text>
-<text x="320" y="843" font-family="Inter, Arial" font-size="23" font-weight="850" fill="#172033">React Planner Experience</text>
-<text x="287" y="882" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Explore rankings + map</text>
-<text x="287" y="908" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Verify + shortlist</text>
-<rect x="765" y="802" width="390" height="120" rx="24" fill="#FFFFFF" stroke="#7C3AED" stroke-width="2" filter="url(#cardShadow)"/>
-<circle cx="799" cy="836" r="17" fill="#7C3AED"/><text x="799" y="843" text-anchor="middle" font-family="Inter, Arial" font-size="15" font-weight="900" fill="white">API</text>
-<text x="830" y="843" font-family="Inter, Arial" font-size="23" font-weight="850" fill="#172033">FastAPI Service Layer</text>
-<text x="797" y="882" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">APIs + Databricks SQL</text>
-<text x="797" y="908" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Lakebase writebacks</text>
-<rect x="1275" y="802" width="390" height="120" rx="24" fill="#FFFFFF" stroke="#168447" stroke-width="2" filter="url(#cardShadow)"/>
-<circle cx="1309" cy="836" r="17" fill="#168447"/><text x="1309" y="843" text-anchor="middle" font-family="Inter, Arial" font-size="15" font-weight="900" fill="white">★</text>
-<text x="1340" y="843" font-family="Inter, Arial" font-size="23" font-weight="850" fill="#172033">Trust Cards + Actions</text>
-<text x="1307" y="882" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Evidence + score rationale</text>
-<text x="1307" y="908" font-family="Inter, Arial" font-size="17" font-weight="520" fill="#64748B">Chat + phone handoff</text>
-<path d="M645,862 C705.0,862 705.0,862 765,862" fill="none" stroke="#334155" stroke-width="3.2" marker-end="url(#arrow)"/>
-<path d="M1155,862 C1215.0,862 1215.0,862 1275,862" fill="none" stroke="#334155" stroke-width="3.2" marker-end="url(#arrow)"/>
-<rect x="1450" y="707" width="235" height="34" rx="17" fill="#FFFFFF" stroke="#0F9F8F" stroke-width="1.5"/><text x="1568" y="729" text-anchor="middle" font-family="Inter, Arial" font-size="13" font-weight="850" fill="#0F9F8F">verified feedback improves trust</text>
-<rect x="90" y="996" width="1740" height="52" rx="26" fill="#0B1220"/><text x="130" y="1029" font-family="Inter, Arial" font-size="19" font-weight="800" fill="white">Demo outcome:</text><text x="278" y="1029" font-family="Inter, Arial" font-size="19" font-weight="600" fill="#E2E8F0">ranked healthcare facilities with explainable trust, map context, human verification, and agent-guided next steps</text><text x="90" y="1068" font-family="Inter, Arial" font-size="12" font-weight="600" fill="#64748B">Prepared for the Databricks Apps &amp; Agents for Good Hackathon · Implementation-backed architecture from CareSignal app and Databricks pipeline code</text>
+<defs>
+<filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#0B1220" flood-opacity="0.12"/></filter>
+<filter id="soft" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#0B1220" flood-opacity="0.08"/></filter>
+<linearGradient id="accent" x1="0" x2="1"><stop offset="0" stop-color="#FF5F1F"/><stop offset="0.58" stop-color="#0E9F8F"/><stop offset="1" stop-color="#2F6BFF"/></linearGradient>
+<linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#F8FBFF"/></linearGradient>
+<marker id="arrow" markerWidth="16" markerHeight="16" refX="12" refY="8" orient="auto" markerUnits="strokeWidth"><path d="M3,3 L13,8 L3,13 z" fill="#334155"/></marker>
+</defs>
+<rect width="1920" height="1080" fill="#F6F8FB"/>
+<circle cx="1740" cy="-130" r="320" fill="#FFF4ED"/>
+<circle cx="-120" cy="1010" r="310" fill="#EEF5FF"/>
+<text x="92" y="96" font-family="Inter, Arial, sans-serif" font-size="56" font-weight="850" fill="#0B1220">CareSignal Architecture</text>
+<text x="94" y="136" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="500" fill="#64748B">Trusted healthcare data → explainable agents → planner-facing application</text>
+<rect x="92" y="164" width="1736" height="7" rx="4" fill="url(#accent)"/>
+<rect x="1538" y="58" width="290" height="60" rx="20" fill="#FFFFFF" stroke="#D7DEE8" filter="url(#soft)"/>
+<path d="M1568 88 L1607 68 L1646 88 L1607 108 Z" fill="none" stroke="#FF5F1F" stroke-width="4" stroke-linejoin="round"/>
+<path d="M1580 88 L1607 102 L1634 88" fill="none" stroke="#FF5F1F" stroke-width="4" stroke-linecap="round"/>
+<text x="1662" y="94" font-family="Inter, Arial" font-size="22" font-weight="800" fill="#0B1220">Databricks App</text>
+<rect x="90" y="215" width="1740" height="725" rx="42" fill="url(#canvas)" stroke="#E2E8F0" filter="url(#soft)"/>
+<rect x="155" y="302" width="470" height="430" rx="34" fill="#FFFFFF" stroke="#2F6BFF" stroke-width="2.6" filter="url(#shadow)"/>
+<rect x="155" y="302" width="470" height="12" rx="6" fill="#2F6BFF"/>
+<circle cx="207" cy="364" r="26" fill="#EEF5FF" stroke="#2F6BFF" stroke-width="2"/>
+<text x="207" y="373" text-anchor="middle" font-family="Inter, Arial" font-size="23" font-weight="850" fill="#2F6BFF">1</text>
+<text x="247" y="357" font-family="Inter, Arial" font-size="18" font-weight="850" fill="#2F6BFF" letter-spacing="1.6">FOUNDATION</text>
+<text x="247" y="395" font-family="Inter, Arial" font-size="33" font-weight="850" fill="#0B1220">Data Layer</text>
+<rect x="197" y="426" width="386" height="74" rx="18" fill="#EEF5FF" opacity="0.72"/>
+<rect x="215" y="447" width="6" height="31" rx="3" fill="#2F6BFF"/>
+<text x="239" y="457" font-family="Inter, Arial" font-size="20" font-weight="800" fill="#172033">Raw sources</text>
+<text x="239" y="484" font-family="Inter, Arial" font-size="15" font-weight="550" fill="#64748B">Facility, location, and health context</text>
+<rect x="197" y="520" width="386" height="74" rx="18" fill="#EEF5FF" opacity="0.72"/>
+<rect x="215" y="541" width="6" height="31" rx="3" fill="#2F6BFF"/>
+<text x="239" y="551" font-family="Inter, Arial" font-size="20" font-weight="800" fill="#172033">Cleansed + enriched</text>
+<text x="239" y="578" font-family="Inter, Arial" font-size="15" font-weight="550" fill="#64748B">Standardized records and service signals</text>
+<rect x="197" y="614" width="386" height="74" rx="18" fill="#EEF5FF" opacity="0.72"/>
+<rect x="215" y="635" width="6" height="31" rx="3" fill="#2F6BFF"/>
+<text x="239" y="645" font-family="Inter, Arial" font-size="20" font-weight="800" fill="#172033">App-ready trust data</text>
+<text x="239" y="672" font-family="Inter, Arial" font-size="15" font-weight="550" fill="#64748B">Gold-quality data for the app</text>
+<rect x="725" y="302" width="470" height="430" rx="34" fill="#FFFFFF" stroke="#0E9F8F" stroke-width="2.6" filter="url(#shadow)"/>
+<rect x="725" y="302" width="470" height="12" rx="6" fill="#0E9F8F"/>
+<circle cx="777" cy="364" r="26" fill="#E9FBF7" stroke="#0E9F8F" stroke-width="2"/>
+<text x="777" y="373" text-anchor="middle" font-family="Inter, Arial" font-size="23" font-weight="850" fill="#0E9F8F">2</text>
+<text x="817" y="357" font-family="Inter, Arial" font-size="18" font-weight="850" fill="#0E9F8F" letter-spacing="1.6">INTELLIGENCE</text>
+<text x="817" y="395" font-family="Inter, Arial" font-size="33" font-weight="850" fill="#0B1220">Agent Layer</text>
+<rect x="767" y="426" width="386" height="74" rx="18" fill="#E9FBF7" opacity="0.72"/>
+<rect x="785" y="447" width="6" height="31" rx="3" fill="#0E9F8F"/>
+<text x="809" y="457" font-family="Inter, Arial" font-size="20" font-weight="800" fill="#172033">Explainable trust</text>
+<text x="809" y="484" font-family="Inter, Arial" font-size="15" font-weight="550" fill="#64748B">Scores, rationale, and uncertainty</text>
+<rect x="767" y="520" width="386" height="74" rx="18" fill="#E9FBF7" opacity="0.72"/>
+<rect x="785" y="541" width="6" height="31" rx="3" fill="#0E9F8F"/>
+<text x="809" y="551" font-family="Inter, Arial" font-size="20" font-weight="800" fill="#172033">Planner assistant</text>
+<text x="809" y="578" font-family="Inter, Arial" font-size="15" font-weight="550" fill="#64748B">Answers questions and recommends next steps</text>
+<rect x="767" y="614" width="386" height="74" rx="18" fill="#E9FBF7" opacity="0.72"/>
+<rect x="785" y="635" width="6" height="31" rx="3" fill="#0E9F8F"/>
+<text x="809" y="645" font-family="Inter, Arial" font-size="20" font-weight="800" fill="#172033">Human feedback</text>
+<text x="809" y="672" font-family="Inter, Arial" font-size="15" font-weight="550" fill="#64748B">Verification improves confidence</text>
+<rect x="1295" y="302" width="470" height="430" rx="34" fill="#FFFFFF" stroke="#FF5F1F" stroke-width="2.6" filter="url(#shadow)"/>
+<rect x="1295" y="302" width="470" height="12" rx="6" fill="#FF5F1F"/>
+<circle cx="1347" cy="364" r="26" fill="#FFF4ED" stroke="#FF5F1F" stroke-width="2"/>
+<text x="1347" y="373" text-anchor="middle" font-family="Inter, Arial" font-size="23" font-weight="850" fill="#FF5F1F">3</text>
+<text x="1387" y="357" font-family="Inter, Arial" font-size="18" font-weight="850" fill="#FF5F1F" letter-spacing="1.6">EXPERIENCE</text>
+<text x="1387" y="395" font-family="Inter, Arial" font-size="33" font-weight="850" fill="#0B1220">Application Layer</text>
+<rect x="1337" y="426" width="386" height="74" rx="18" fill="#FFF4ED" opacity="0.72"/>
+<rect x="1355" y="447" width="6" height="31" rx="3" fill="#FF5F1F"/>
+<text x="1379" y="457" font-family="Inter, Arial" font-size="20" font-weight="800" fill="#172033">Planner experience</text>
+<text x="1379" y="484" font-family="Inter, Arial" font-size="15" font-weight="550" fill="#64748B">Facility search, rankings, and workflow</text>
+<rect x="1337" y="520" width="386" height="74" rx="18" fill="#FFF4ED" opacity="0.72"/>
+<rect x="1355" y="541" width="6" height="31" rx="3" fill="#FF5F1F"/>
+<text x="1379" y="551" font-family="Inter, Arial" font-size="20" font-weight="800" fill="#172033">Decision tools</text>
+<text x="1379" y="578" font-family="Inter, Arial" font-size="15" font-weight="550" fill="#64748B">Maps, Trust Cards, and shortlists</text>
+<rect x="1337" y="614" width="386" height="74" rx="18" fill="#FFF4ED" opacity="0.72"/>
+<rect x="1355" y="635" width="6" height="31" rx="3" fill="#FF5F1F"/>
+<text x="1379" y="645" font-family="Inter, Arial" font-size="20" font-weight="800" fill="#172033">Voice + chat</text>
+<text x="1379" y="672" font-family="Inter, Arial" font-size="15" font-weight="550" fill="#64748B">Phone handoff and conversational guidance</text>
+<line x1="625" y1="517" x2="725" y2="517" stroke="#334155" stroke-width="4" marker-end="url(#arrow)"/>
+<line x1="1195" y1="517" x2="1295" y2="517" stroke="#334155" stroke-width="4" marker-end="url(#arrow)"/>
+<rect x="640" y="492" width="70" height="36" rx="18" fill="#FFFFFF" stroke="#D7DEE8"/><text x="675" y="516" text-anchor="middle" font-family="Inter, Arial" font-size="15" font-weight="800" fill="#64748B">trust</text>
+<rect x="1210" y="492" width="70" height="36" rx="18" fill="#FFFFFF" stroke="#D7DEE8"/><text x="1245" y="516" text-anchor="middle" font-family="Inter, Arial" font-size="15" font-weight="800" fill="#64748B">act</text>
+<rect x="155" y="790" width="1610" height="90" rx="28" fill="#0B1220"/>
+<text x="205" y="827" font-family="Inter, Arial" font-size="22" font-weight="850" fill="white">Demo outcome</text>
+<text x="205" y="858" font-family="Inter, Arial" font-size="18" font-weight="540" fill="#CBD5E1">Ranked healthcare facilities with evidence, confidence, map context, verification, and agent-guided next steps.</text>
+<rect x="1220" y="814" width="145" height="42" rx="21" fill="white" opacity="0.10" stroke="white" stroke-opacity="0.18"/>
+<text x="1238" y="832" font-family="Inter, Arial" font-size="12" font-weight="800" fill="#CBD5E1">SERVICES</text>
+<text x="1238" y="850" font-family="Inter, Arial" font-size="16" font-weight="850" fill="white">7</text>
+<rect x="1390" y="814" width="145" height="42" rx="21" fill="white" opacity="0.10" stroke="white" stroke-opacity="0.18"/>
+<text x="1408" y="832" font-family="Inter, Arial" font-size="12" font-weight="800" fill="#CBD5E1">TRUST LENS</text>
+<text x="1408" y="850" font-family="Inter, Arial" font-size="16" font-weight="850" fill="white">0–10</text>
+<rect x="1560" y="814" width="165" height="42" rx="21" fill="white" opacity="0.10" stroke="white" stroke-opacity="0.18"/>
+<text x="1578" y="832" font-family="Inter, Arial" font-size="12" font-weight="800" fill="#CBD5E1">WORKFLOW</text>
+<text x="1578" y="850" font-family="Inter, Arial" font-size="15" font-weight="850" fill="white">human-in-loop</text>
+<text x="92" y="1000" font-family="Inter, Arial" font-size="13" font-weight="650" fill="#64748B">Prepared for Databricks Apps &amp; Agents for Good Hackathon · Executive architecture view · Technical details in source notebooks and app code</text>
 </svg>

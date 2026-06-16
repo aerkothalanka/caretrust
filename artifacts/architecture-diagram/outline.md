@@ -1,12 +1,12 @@
 ---
-type: framework infographic
-style: polished demo slide / enterprise architecture
-palette: Databricks orange + navy + healthcare teal
+type: executive architecture infographic
+style: polished minimal demo slide
+palette: neutral white/navy with Databricks orange and healthcare teal
 image_count: 1
 ---
 
 ## Illustration 1
-**Position**: Standalone demo slide.
-**Purpose**: Explain CareSignal architecture without overwhelming judges with implementation detail.
-**Visual Content**: Three horizontal swim lanes: Data Layer, Agent Layer, Application Layer. Data flows down into agent capabilities and then into the Databricks App experience, with a subtle feedback loop from human verification back to app data.
+**Position**: Main demo architecture slide.
+**Purpose**: Present CareSignal architecture clearly to judges without clutter.
+**Visual Content**: Three large cards — Data Layer, Agent Layer, Application Layer — connected by a single flow. Each card has only high-level capabilities. A small bottom value strip explains the feedback loop and demo outcome.
 **Filename**: caresignal-architecture-infographic.png
