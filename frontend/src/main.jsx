@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
@@ -238,8 +238,54 @@ function VerificationForm({ facility, service, serviceLabel, facilities, locatio
 }
 
 function CallNotesPanel({ result }) {
+  const [playing, setPlaying] = useState(false);
+  const [activeTurn, setActiveTurn] = useState(-1);
+  const previousResultRef = useRef(null);
+  const conversation = result?.conversation || [];
+  const speakTurn = (index) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis || !conversation[index]) return;
+    window.speechSynthesis.cancel();
+    const turn = conversation[index];
+    const utterance = new SpeechSynthesisUtterance(`${turn.speaker}. ${turn.text}`);
+    utterance.rate = 0.95;
+    utterance.pitch = turn.speaker?.toLowerCase().includes('agent') ? 1.05 : 0.9;
+    window.speechSynthesis.speak(utterance);
+  };
+  const startPlayback = () => {
+    if (!conversation.length) return;
+    setActiveTurn(0);
+    setPlaying(true);
+    speakTurn(0);
+  };
+  const stopPlayback = () => {
+    setPlaying(false);
+    if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
+  };
+  useEffect(() => {
+    if (!result) return;
+    if (previousResultRef.current !== result) {
+      previousResultRef.current = result;
+      setActiveTurn(-1);
+      setPlaying(false);
+      window.setTimeout(startPlayback, 250);
+    }
+    return () => { if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel(); };
+  }, [result]);
+  useEffect(() => {
+    if (!playing || activeTurn < 0) return undefined;
+    if (activeTurn >= conversation.length - 1) {
+      const doneTimer = window.setTimeout(() => setPlaying(false), 1200);
+      return () => window.clearTimeout(doneTimer);
+    }
+    const timer = window.setTimeout(() => {
+      const next = activeTurn + 1;
+      setActiveTurn(next);
+      speakTurn(next);
+    }, 2200);
+    return () => window.clearTimeout(timer);
+  }, [playing, activeTurn, conversation.length]);
   if (!result) return null;
-  return <div className="callNotesPanel"><div><b>Demo Call Notes</b><span>Information As Of {formatInfoDate(result.information_date)}</span></div><p>{result.summary}</p><div className="callNotesColumns"><div><h3>Confirmed</h3>{(result.verified_claims || []).map((item) => <span key={item}>{item}</span>)}</div><div><h3>Still Check</h3>{(result.open_questions || []).map((item) => <span key={item}>{item}</span>)}</div></div><div className="callTranscript"><h3>Demo Conversation</h3>{(result.conversation || []).map((turn, i) => <p key={`${turn.speaker}-${i}`}><b>{turn.speaker}:</b> {turn.text}</p>)}</div></div>;
+  return <div className="callNotesPanel"><div><b>Demo Call Notes</b><span>Information As Of {formatInfoDate(result.information_date)}</span></div><div className="callPlaybackBar"><span>{playing ? `Playing Demo Call · Turn ${activeTurn + 1}/${conversation.length}` : 'Demo Call Ready'}</span><button type="button" onClick={playing ? stopPlayback : startPlayback}>{playing ? 'Stop Playback' : 'Play Demo Call'}</button></div><p>{result.summary}</p><div className="callNotesColumns"><div><h3>Confirmed</h3>{(result.verified_claims || []).map((item) => <span key={item}>{item}</span>)}</div><div><h3>Still Check</h3>{(result.open_questions || []).map((item) => <span key={item}>{item}</span>)}</div></div><div className="callTranscript"><h3>Demo Conversation</h3>{conversation.map((turn, i) => <p key={`${turn.speaker}-${i}`} className={i === activeTurn ? 'activeTurn' : i < activeTurn ? 'playedTurn' : ''}><b>{turn.speaker}:</b> {turn.text}</p>)}</div></div>;
 }
 
 function FacilityInfoTimeline({ actions, facility }) {
