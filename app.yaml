@@ -4,12 +4,16 @@ command:
   - "backend.main"
 
 env:
+  - name: DATABRICKS_HOST
+    value: "https://dbc-b0240400-63de.cloud.databricks.com"
   - name: DATABRICKS_WAREHOUSE_ID
     value: "01d40772d8293b41"
   - name: CARESIGNAL_FALLBACK_ON_ERROR
     value: "true"
   - name: CARESIGNAL_DATABRICKS_LIMIT
-    value: "1000"
+    value: "12000"
+  - name: CARESIGNAL_DATABRICKS_CHUNK_SIZE
+    value: "250"
   - name: CARESIGNAL_PINCODE_LIMIT
     value: "25000"
   - name: GEMINI_LIVE_MODEL

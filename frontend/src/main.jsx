@@ -16,9 +16,9 @@ const SERVICE_FALLBACK = [
 ];
 
 const TABS = [
-  { id: 'explorer', label: 'Explorer' },
-  { id: 'map', label: 'Map + Radius' },
-  { id: 'verification', label: 'Verification' },
+  { id: 'explorer', label: 'Facility Explorer' },
+  { id: 'map', label: 'Geo Search' },
+  { id: 'verification', label: 'Trust Review' },
   { id: 'assistant', label: 'Chat Assistant' },
 ];
 
@@ -103,13 +103,13 @@ function hasUncertainty(f) {
   return flags.includes('sparse') || flags.includes('verify') || flags.includes('no direct') || flags.includes('no source') || displayConfidence(f).toLowerCase().includes('review') || !f.phone || !f.website;
 }
 
-function AppHeader({ activeTab, setActiveTab }) {
+function AppHeader({ activeTab, setActiveTab, selected }) {
   return <header className="topbar">
     <div className="brandNav">
-      <div className="brandBlock"><div className="brand">Care<span>Trust</span></div><div className="brandSub">Facility Trust Desk</div></div>
+      <div className="brandBlock"><div className="brand">Care<span>Signal</span></div><div className="brandSub">Facility Trust Desk</div></div>
       <nav className="tabs" aria-label="Main sections">{TABS.map((tab) => <button key={tab.id} className={`${activeTab === tab.id ? 'active' : ''} ${tab.id === 'assistant' ? 'assistantTab' : ''}`.trim()} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}</nav>
     </div>
-    <div className="callTop"><b>Digital call assistant</b><a href={`tel:${PHONE_TEL}`}>Call {PHONE_DISPLAY}</a></div>
+    <div className="callTop"><b>Digital call assistant</b>{selected?.name && <span className="headerContext" title={selected.name}>{selected.name}</span>}<a href={`tel:${PHONE_TEL}`}>Call {PHONE_DISPLAY}</a></div>
   </header>;
 }
 
@@ -143,7 +143,7 @@ function TrustCard({ facility, serviceLabel, onClose, onMethodology }) {
 }
 
 function MethodologyModal({ onClose }) {
-  return <div className="trustModal" role="dialog" aria-modal="true" aria-label="CareTrust score methodology" onClick={onClose}><aside className="card methodologySheet" onClick={(e) => e.stopPropagation()}><button className="trustClose" aria-label="Close methodology" onClick={onClose}>×</button><span className="eyebrow dark">Scoring methodology</span><h2>How CareTrust ranks facilities</h2><ul><li><b>Evidence match:</b> specialties, procedures, equipment, capabilities, and descriptions are matched to the selected service.</li><li><b>Operational readiness:</b> phone/website contactability and location completeness improve trust.</li><li><b>Human verification:</b> verified claims get a boost; rejected or uncertain claims are penalized.</li><li><b>Uncertainty penalties:</b> sparse evidence, missing source URLs, or missing contact paths are surfaced for follow-up.</li></ul><p>This is a planning aid, not medical advice. Referral decisions should still be confirmed directly with the facility.</p></aside></div>;
+  return <div className="trustModal" role="dialog" aria-modal="true" aria-label="CareSignal score methodology" onClick={onClose}><aside className="card methodologySheet" onClick={(e) => e.stopPropagation()}><button className="trustClose" aria-label="Close methodology" onClick={onClose}>×</button><span className="eyebrow dark">Scoring methodology</span><h2>How CareSignal ranks facilities</h2><ul><li><b>Evidence match:</b> specialties, procedures, equipment, capabilities, and descriptions are matched to the selected service.</li><li><b>Operational readiness:</b> phone/website contactability and location completeness improve trust.</li><li><b>Human verification:</b> verified claims get a boost; rejected or uncertain claims are penalized.</li><li><b>Uncertainty penalties:</b> sparse evidence, missing source URLs, or missing contact paths are surfaced for follow-up.</li></ul><p>This is a planning aid, not medical advice. Referral decisions should still be confirmed directly with the facility.</p></aside></div>;
 }
 
 function googleMapZoom(radius) { return radius <= 50 ? 10 : radius <= 150 ? 8 : radius <= 350 ? 7 : 6; }
@@ -172,7 +172,7 @@ function VerificationForm({ facility, service, serviceLabel, onVerified }) {
   const [notes, setNotes] = useState('Verified by phone or visit.');
   if (!facility) return null;
   const submit = async () => {
-    const payload = { unique_id: facility.unique_id, procedure: service, status, verifier_name: 'CareTrust demo user', notes };
+    const payload = { unique_id: facility.unique_id, procedure: service, status, verifier_name: 'CareSignal demo user', notes };
     try { const result = await api('/api/verifications', { method: 'POST', body: JSON.stringify(payload) }); onVerified(status, result.facility); }
     catch (_) { onVerified(status); }
   };
@@ -232,7 +232,7 @@ function App() {
   const addShortlist = async () => { if (!selected) return; const optimistic = { id: `${selected.unique_id}-${Date.now()}`, name: selected.name, meta: `${serviceLabel} • ${selected.city || selected.state || 'India'}` }; setShortlists((x) => [optimistic, ...x]); try { await api('/api/shortlists', { method: 'POST', body: JSON.stringify({ unique_id: selected.unique_id, procedure: service, notes: `${serviceLabel} shortlist` }) }); await refreshHistory(); } catch (_) {} };
 
   return <>
-    <AppHeader activeTab={activeTab} setActiveTab={setActiveTab} />
+    <AppHeader activeTab={activeTab} setActiveTab={setActiveTab} selected={selected} />
     <main className="main">
       <section className="hero filtersOnly"><FilterBar filters={filters} values={{ country, state, city, pincode, service, radius, evidenceFocus }} setters={{ setCountry, setState, setCity, setPincode, setService, setRadius, setEvidenceFocus }} services={services} /></section>
       {activeTab === 'explorer' && <div className="grid single"><FacilityTable facilities={displayFacilities} selected={selected} setSelected={setSelected} onOpenTrust={openTrust} /></div>}

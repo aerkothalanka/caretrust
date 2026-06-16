@@ -16,7 +16,7 @@ SAMPLE_TTS_PATH = Path("/Users/avirkothalanka/.hermes/profiles/dais2026/audio_ca
 GEMINI_LIVE_MODEL = os.getenv("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
 GEMINI_LIVE_VOICE = os.getenv("GEMINI_LIVE_VOICE", "Puck")
 GEMINI_TIMEOUT_SECONDS = float(os.getenv("GEMINI_LIVE_TIMEOUT_SECONDS", "14"))
-GEMINI_SAMPLE_WAV = Path(tempfile.gettempdir()) / "caretrust_gemini_live_sample.wav"
+GEMINI_SAMPLE_WAV = Path(tempfile.gettempdir()) / "caresignal_gemini_live_sample.wav"
 
 
 @dataclass
@@ -53,7 +53,7 @@ def build_voice_response(store: DataStore, request: VoiceRequest) -> VoiceRespon
         ),
     )
     deterministic_text = (
-        f"CareTrust summary: {assistant_response.answer} "
+        f"CareSignal summary: {assistant_response.answer} "
         "For a live referral, confirm department availability, appointment timing, costs, and emergency readiness."
     )
     prompt = _voice_prompt(request.transcript, deterministic_text)
@@ -81,7 +81,7 @@ def gemini_sample_audio_path() -> Path | None:
     if GEMINI_SAMPLE_WAV.exists() and GEMINI_SAMPLE_WAV.stat().st_size > 44:
         return GEMINI_SAMPLE_WAV
     prompt = (
-        "You are CareTrust's Facility Trust Desk voice assistant. In one brief sentence, "
+        "You are CareSignal's Facility Trust Desk voice assistant. In one brief sentence, "
         "say that you can explain facility rankings, evidence, uncertainty, and verification steps."
     )
     result = _run_gemini_live(prompt, audio=True)
@@ -92,11 +92,11 @@ def gemini_sample_audio_path() -> Path | None:
 
 def _voice_prompt(user_transcript: str, deterministic_context: str) -> str:
     return (
-        "You are CareTrust's realtime voice assistant for healthcare facility planners. "
+        "You are CareSignal's realtime voice assistant for healthcare facility planners. "
         "Answer conversationally in 2-3 short sentences. Explain rankings, evidence, uncertainty, "
         "and human verification steps. Do not provide medical advice; focus on facility capability evidence.\n\n"
         f"User said: {user_transcript}\n"
-        f"CareTrust context: {deterministic_context}"
+        f"CareSignal context: {deterministic_context}"
     )
 
 
@@ -125,7 +125,7 @@ async def _gemini_live_turn(prompt: str, *, audio: bool) -> GeminiLiveResult:
             parts=[
                 types.Part(
                     text=(
-                        "You are CareTrust, a concise, calm facility trust desk voice assistant. "
+                        "You are CareSignal, a concise, calm facility trust desk voice assistant. "
                         "Use evidence-grounded language and remind users to verify live availability."
                     )
                 )

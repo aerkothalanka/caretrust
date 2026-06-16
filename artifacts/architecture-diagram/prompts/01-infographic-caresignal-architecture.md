@@ -6,7 +6,7 @@ aspect: 16:9
 source: Databricks notebooks + CareSignal app code + Claude Code design review
 ---
 
-Create a professional hackathon-demo architecture slide titled "CareTrust Architecture".
+Create a professional hackathon-demo architecture slide titled "CareSignal Architecture".
 Use only three major swim lanes:
 1. Data Layer — raw facility/location/health data, cleansing & enrichment, gold trust layer, Lakebase app tables.
 2. Agent Layer — explainable trust scoring, planner chat assistant, voice/call assistant, human verification feedback.

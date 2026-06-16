@@ -26,7 +26,7 @@ from .twilio_voice import twilio_voice_entrypoint, twilio_voice_respond
 from .voice import SAMPLE_TTS_PATH, build_voice_response, gemini_realtime_status, gemini_sample_audio_path
 
 
-app = FastAPI(title="CareTrust API", version="0.1.0")
+app = FastAPI(title="CareSignal API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CARESIGNAL_CORS_ORIGINS", "*").split(","),

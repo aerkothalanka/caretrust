@@ -8,8 +8,8 @@ CareSignal is a Databricks Apps hackathon project.
 - Databricks query layer: Databricks SQL Statement Execution API where available.
 - Persistent app tables: create under `lakebase_hackathon_demo.public`, never `workspace.default`.
 - Source dataset tables:
-  - `databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.facilities`
-  - `databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.india_post_pincode_directory`
+  - `lakebase_hackathon_demo.public.facilities_gold_sync` (clean Lakebase/Postgres synced table)
+  - `lakebase_hackathon_demo.public.india_post_pincode_directory_gold_sync` (clean Lakebase/Postgres synced table)
   - `databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.nfhs_5_district_health_indicators`
 
 ## Product requirements

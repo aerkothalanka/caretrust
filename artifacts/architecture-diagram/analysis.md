@@ -1,4 +1,4 @@
-# CareTrust / CareSignal Demo Architecture — Refined
+# CareSignal Demo Architecture — Refined
 
 This version intentionally removes implementation-level detail from the original architecture diagram so it is suitable for a hackathon demo slide.
 

@@ -27,3 +27,14 @@ body{background:linear-gradient(135deg,#f9f7f4 0%,#fff4f0 100%)}
 .filterCard{grid-template-columns:repeat(7,minmax(0,1fr))}
 .methodLink{margin-left:auto;border-radius:999px;background:#fff1ed;color:#b7281a;padding:7px 10px;font-weight:950}.methodologySheet{position:relative;width:min(620px,94vw);padding:30px;border-radius:28px;background:#fff;box-shadow:0 34px 90px rgba(2,6,23,.28)}.methodologySheet h2{margin:6px 54px 12px 0;font-size:28px;letter-spacing:-.04em}.methodologySheet ul{display:grid;gap:10px;margin:0 0 14px;padding-left:20px}.methodologySheet li{color:#334155}.eyebrow.dark{color:#b7281a}.promptChips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.promptChips button{border-radius:999px;background:#fff1ed;color:#b7281a;padding:7px 10px;font-size:12px;font-weight:900}.voiceStatus{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0 10px}.voiceStatus .dot{width:9px;height:9px;border-radius:999px;background:#16a34a;padding:0;box-shadow:0 0 0 4px rgba(22,163,74,.12)}.voiceStatus span,.voiceStatus small{display:inline-flex;align-items:center;border-radius:999px;background:#fff1ed;color:#b7281a;font-size:11px;font-weight:900;padding:5px 8px}.voiceCallBtn{display:inline-flex;align-items:center;border-radius:999px;background:#ff3621;color:#fff;text-decoration:none;padding:10px 12px;font-weight:950}.historyCard{min-height:220px}.historyList{display:grid;gap:9px}.historyItem{display:grid;gap:3px;border:1px solid #ffd1c8;background:#fff8f5;border-radius:16px;padding:10px}.historyItem span{color:#334155}.historyItem small{color:#64748b}.shortlistInline{background:#1b3139}
 @media (max-width:1100px){.filterCard{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Claude Code UI polish pass: compact demo refinements */
+.voiceSampleBtn{display:none!important}
+.trustPillGroup h3,.trustSection h3{color:#ff3621!important}.trustPillGroup p,.trustPillGroup span{color:#000!important}
+.rank tr.selected td:first-child{border-left:4px solid #ff3621!important}.rank tr.selected td{box-shadow:inset 0 1px 0 rgba(255,54,33,.08),inset 0 -1px 0 rgba(255,54,33,.08)}
+.tabs button.assistantTab{border-left:2px solid #e2e8f0;padding-left:16px}
+.filterCard{position:relative;overflow:hidden}.filterCard:before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:#ff7a45;border-radius:28px 28px 0 0}
+.scoreBubble{box-shadow:0 0 0 5px rgba(255,54,33,.16),inset 0 1px 0 rgba(255,255,255,.22),0 16px 34px rgba(15,23,42,.18)!important}
+.trustOpenBtn{min-width:62px;justify-content:center}.headerContext{display:inline-flex;align-items:center;max-width:220px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid #e2e8f0;background:#fff;color:#334155;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:850;box-shadow:0 6px 16px rgba(15,23,42,.06)}
+@media (max-width:860px){.headerContext{display:none}.tabs button.assistantTab{border-left:0;padding-left:10px}}
+

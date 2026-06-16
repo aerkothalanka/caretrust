@@ -25,10 +25,10 @@ def twiml_response(xml: str) -> Response:
 async def twilio_voice_entrypoint(request: Request) -> Response:
     """Initial inbound-call webhook. Twilio expects TwiML XML, not JSON."""
     form = await _parse_twilio_form(request)
-    call_sid = _field(form, "CallSid") or "caretrust-call"
+    call_sid = _field(form, "CallSid") or "caresignal-call"
     action = _public_action_url(request, call_sid)
     prompt = (
-        "Welcome to CareTrust, the facility trust desk. "
+        "Welcome to CareSignal, the facility trust desk. "
         "Ask for top facilities, evidence, score breakdown, human verification, or uncertainty. "
         "For example, say: top cardiac surgery facilities, or explain evidence for ACE Heart. "
         "You can also press 1 for cardiac surgery, 2 for eye care, 3 for ICU, or 4 for verification."
@@ -41,12 +41,12 @@ async def twilio_voice_respond(store: DataStore, request: Request) -> Response:
     form = await _parse_twilio_form(request)
     session_id = request.query_params.get("session_id") or _field(form, "CallSid") or None
     speech = (_field(form, "SpeechResult") or _digits_to_prompt(_field(form, "Digits")) or "").strip()
-    action = _public_action_url(request, session_id or 'caretrust-call')
+    action = _public_action_url(request, session_id or 'caresignal-call')
 
     if not speech:
         return twiml_response(_gather_twiml("I did not catch that. Please ask about a procedure, facility, evidence, or verification status.", action))
     if _wants_hangup(speech):
-        return twiml_response(_say_twiml("Thanks for calling CareTrust. Goodbye.", hangup=True))
+        return twiml_response(_say_twiml("Thanks for calling CareSignal. Goodbye.", hangup=True))
 
     procedure = _infer_procedure(speech)
     facility_id = _resolve_facility_id(store, speech)

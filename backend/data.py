@@ -14,10 +14,44 @@ from .models import Facility, ShortlistRequest, VerificationRequest, VoiceReques
 from .scoring import PROCEDURES
 
 
-FACILITIES_TABLE = "databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.facilities"
-PINCODE_TABLE = "databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.india_post_pincode_directory"
-NFHS_TABLE = "databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.nfhs_5_district_health_indicators"
 APP_SCHEMA = "lakebase_hackathon_demo.public"
+FACILITIES_TABLE = f"{APP_SCHEMA}.facilities_gold_sync"
+PINCODE_TABLE = f"{APP_SCHEMA}.india_post_pincode_directory_gold_sync"
+NFHS_TABLE = "databricks_virtue_foundation_dataset_dais_2026.virtue_foundation_dataset.nfhs_5_district_health_indicators"
+FACILITY_QUERY_COLUMNS = [
+    "sync_pk",
+    "unique_id",
+    "name",
+    "Name_Standardized",
+    "organization_type",
+    "officialPhone",
+    "phone_numbers",
+    "email",
+    "officialWebsite",
+    "websites",
+    "address_line1",
+    "address_line2",
+    "address_city",
+    "address_stateOrRegion",
+    "address_zipOrPostcode",
+    "address_country",
+    "description",
+    "specialties",
+    "procedure",
+    "equipment",
+    "capability",
+    "recency_of_page_update",
+    "source",
+    "latitude",
+    "longitude",
+    "source_urls",
+    "service_tags_json",
+    "service_tag_count",
+    "facility_trust_score",
+    "trust_tier",
+    "review_flag",
+    "primary_service_tag",
+]
 
 
 class DataStore:
@@ -336,49 +370,88 @@ def _load_query_rows(query: str) -> list[dict[str, Any]]:
     warehouse_id = os.getenv("DATABRICKS_WAREHOUSE_ID")
     if not warehouse_id:
         return []
-    host = (os.getenv("DATABRICKS_HOST") or "").rstrip("/")
-    token = os.getenv("DATABRICKS_TOKEN") or os.getenv("DATABRICKS_PAT")
-    if host and token:
-        if not host.startswith("http"):
-            host = f"https://{host}"
-        response = _statement_api(host, token, {"statement": query, "warehouse_id": warehouse_id, "wait_timeout": "20s", "disposition": "INLINE"})
-        state = response.get("status", {}).get("state")
-        statement_id = response.get("statement_id")
-        attempts = 0
-        while state in {"PENDING", "RUNNING"} and statement_id and attempts < 10:
-            attempts += 1
-            time.sleep(1)
-            response = _statement_api(host, token, None, statement_id)
-            state = response.get("status", {}).get("state")
-        if state == "SUCCEEDED":
-            columns = [column["name"] for column in response.get("manifest", {}).get("schema", {}).get("columns", [])]
-            data = response.get("result", {}).get("data_array", [])
-            return [dict(zip(columns, row)) for row in data] if columns else []
-    from databricks import sql
-    from databricks.sdk.core import Config
-    cfg = Config()
-    conn = sql.connect(server_hostname=cfg.host, http_path=f"/sql/1.0/warehouses/{warehouse_id}", credentials_provider=lambda: cfg.authenticate)
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute(query)
-            names = [column[0] for column in cursor.description]
-            return [dict(zip(names, row)) for row in cursor.fetchall()]
-    finally:
-        conn.close()
+    rows = _execute_statement_rows(query, warehouse_id, wait_timeout="20s", attempts=10)
+    if rows:
+        return rows
+    return _execute_sql_connector_rows(query, warehouse_id)
+
 
 def _load_databricks_facility_rows() -> list[dict[str, Any]]:
     warehouse_id = os.getenv("DATABRICKS_WAREHOUSE_ID")
     if not warehouse_id:
         return []
-    statement_rows = _load_statement_execution_rows(warehouse_id)
-    if statement_rows:
-        return statement_rows
+    limit = int(os.getenv("CARESIGNAL_DATABRICKS_LIMIT", "250"))
+    chunk_size = max(50, int(os.getenv("CARESIGNAL_DATABRICKS_CHUNK_SIZE", "250")))
+    query_columns = ", ".join(f"`{column}`" for column in FACILITY_QUERY_COLUMNS)
+    rows: list[dict[str, Any]] = []
+    for offset in range(0, limit, chunk_size):
+        chunk_limit = min(chunk_size, limit - offset)
+        query = f"""
+            SELECT {query_columns}
+            FROM {FACILITIES_TABLE}
+            ORDER BY sync_pk
+            LIMIT {chunk_limit} OFFSET {offset}
+        """
+        chunk = _execute_statement_rows(query, warehouse_id, wait_timeout="20s", attempts=10)
+        if not chunk:
+            break
+        rows.extend(chunk)
+        if len(chunk) < chunk_limit:
+            break
+    return rows
+
+
+def _execute_statement_rows(query: str, warehouse_id: str, wait_timeout: str = "20s", attempts: int = 10) -> list[dict[str, Any]]:
+    payload = {
+        "statement": query,
+        "warehouse_id": warehouse_id,
+        "wait_timeout": wait_timeout,
+        "on_wait_timeout": "CONTINUE",
+        "disposition": "INLINE",
+    }
+    response: dict[str, Any] = {}
+    host = (os.getenv("DATABRICKS_HOST") or "").rstrip("/")
+    token = os.getenv("DATABRICKS_TOKEN") or os.getenv("DATABRICKS_PAT")
+    if host and token:
+        if not host.startswith("http"):
+            host = f"https://{host}"
+        response = _statement_api(host, token, payload)
+        statement_id = response.get("statement_id")
+        state = response.get("status", {}).get("state")
+        poll_attempts = 0
+        while state in {"PENDING", "RUNNING"} and statement_id and poll_attempts < attempts:
+            poll_attempts += 1
+            time.sleep(1)
+            response = _statement_api(host, token, None, statement_id)
+            state = response.get("status", {}).get("state")
+    else:
+        try:
+            from databricks.sdk import WorkspaceClient
+
+            client = WorkspaceClient()
+            response = client.api_client.do("POST", "/api/2.0/sql/statements/", body=payload)
+            statement_id = response.get("statement_id")
+            state = response.get("status", {}).get("state")
+            poll_attempts = 0
+            while state in {"PENDING", "RUNNING"} and statement_id and poll_attempts < attempts:
+                poll_attempts += 1
+                time.sleep(1)
+                response = client.api_client.do("GET", f"/api/2.0/sql/statements/{statement_id}")
+                state = response.get("status", {}).get("state")
+        except Exception:
+            return []
+    if response.get("status", {}).get("state") != "SUCCEEDED":
+        return []
+    columns = [column["name"] for column in response.get("manifest", {}).get("schema", {}).get("columns", [])]
+    data = response.get("result", {}).get("data_array", [])
+    return [dict(zip(columns, row)) for row in data] if columns else []
+
+
+def _execute_sql_connector_rows(query: str, warehouse_id: str) -> list[dict[str, Any]]:
     from databricks import sql
     from databricks.sdk.core import Config
 
     cfg = Config()
-    limit = int(os.getenv("CARESIGNAL_DATABRICKS_LIMIT", "250"))
-    query = f"SELECT * FROM {FACILITIES_TABLE} LIMIT {limit}"
     conn = sql.connect(
         server_hostname=cfg.host,
         http_path=f"/sql/1.0/warehouses/{warehouse_id}",
@@ -391,36 +464,6 @@ def _load_databricks_facility_rows() -> list[dict[str, Any]]:
             return [dict(zip(names, row)) for row in cursor.fetchall()]
     finally:
         conn.close()
-
-
-def _load_statement_execution_rows(warehouse_id: str) -> list[dict[str, Any]]:
-    host = (os.getenv("DATABRICKS_HOST") or "").rstrip("/")
-    token = os.getenv("DATABRICKS_TOKEN") or os.getenv("DATABRICKS_PAT")
-    if not host or not token:
-        return []
-    if not host.startswith("http"):
-        host = f"https://{host}"
-    limit = int(os.getenv("CARESIGNAL_DATABRICKS_LIMIT", "250"))
-    payload = {
-        "statement": f"SELECT * FROM {FACILITIES_TABLE} LIMIT {limit}",
-        "warehouse_id": warehouse_id,
-        "wait_timeout": "10s",
-        "disposition": "INLINE",
-    }
-    response = _statement_api(host, token, payload)
-    state = response.get("status", {}).get("state")
-    statement_id = response.get("statement_id")
-    attempts = 0
-    while state in {"PENDING", "RUNNING"} and statement_id and attempts < 3:
-        attempts += 1
-        time.sleep(1)
-        response = _statement_api(host, token, None, statement_id)
-        state = response.get("status", {}).get("state")
-    if state != "SUCCEEDED":
-        return []
-    columns = [column["name"] for column in response.get("manifest", {}).get("schema", {}).get("columns", [])]
-    data = response.get("result", {}).get("data_array", [])
-    return [dict(zip(columns, row)) for row in data] if columns else []
 
 
 def _statement_api(host: str, token: str, payload: dict[str, Any] | None, statement_id: str | None = None) -> dict[str, Any]:
@@ -442,23 +485,31 @@ def _statement_api(host: str, token: str, payload: dict[str, Any] | None, statem
 def _normalize_facility(row: dict[str, Any], index: int) -> Facility:
     lower = {key.lower(): value for key, value in row.items()}
     text_blob = " ".join(str(value) for value in row.values() if value is not None)
-    unique_id = str(_first(lower, "unique_id", "id", "facility_id", "uuid") or f"dbx-{index}")
-    name = str(_first(lower, "name", "facility_name", "hospital_name", "organisation_name") or f"Facility {index + 1}")
-    website = _first(lower, "website", "url", "web_url", "facility_url")
-    source_url = _first(lower, "source_url", "source", "reference_url", "data_source_url") or website
-    specialty_text = str(_first(lower, "specialties", "speciality", "services", "departments") or text_blob)
+    unique_id = str(_first(lower, "sync_pk", "unique_id", "id", "facility_id", "uuid") or f"dbx-{index}")
+    name = str(
+        _first(lower, "name", "name_standardized", "facility_name", "hospital_name", "organisation_name")
+        or f"Facility {index + 1}"
+    )
+    website = _first_url(lower, "officialwebsite", "website", "websites", "url", "web_url", "facility_url")
+    source_url = _first_url(lower, "source_urls", "source_url", "source", "reference_url", "data_source_url", "websites") or website
+    specialty_text = str(
+        _first(lower, "service_tags_json", "service_tags", "specialties", "speciality", "services", "departments")
+        or text_blob
+    )
     return Facility(
         unique_id=unique_id,
         name=name,
-        country=_string_or_none(_first(lower, "country", "country_name")) or "India",
-        state=_string_or_none(_first(lower, "state", "state_name", "address_stateorregion")),
+        country=_string_or_none(_first(lower, "address_country", "country", "country_name")) or "India",
+        state=_string_or_none(_first(lower, "address_stateorregion", "state", "state_name")),
         district=_string_or_none(_first(lower, "district", "district_name")),
-        city=_string_or_none(_first(lower, "city", "town", "village", "address_city")),
-        pincode=_string_or_none(_first(lower, "pincode", "pin_code", "postal_code", "address_postalcode")),
+        city=_string_or_none(_first(lower, "address_city", "city", "town", "village")),
+        pincode=_string_or_none(_first(lower, "address_ziporpostcode", "pincode", "pin_code", "postal_code", "address_postalcode")),
         latitude=_float_or_none(_first(lower, "latitude", "lat", "geo_latitude")),
         longitude=_float_or_none(_first(lower, "longitude", "lon", "lng", "geo_longitude")),
-        address=_string_or_none(_first(lower, "address", "street_address", "location")),
-        phone=_string_or_none(_first(lower, "phone", "telephone", "mobile", "contact")),
+        address=_string_or_none(
+            _first(lower, "address", "street_address", "location", "address_line1", "address_line2", "address_line3")
+        ),
+        phone=_string_or_none(_first(lower, "officialphone", "phone", "phone_numbers", "telephone", "mobile", "contact")),
         website=_string_or_none(website),
         source_url=_string_or_none(source_url),
         specialties=_split_values(specialty_text),
@@ -466,7 +517,7 @@ def _normalize_facility(row: dict[str, Any], index: int) -> Facility:
         equipment=_infer_terms(text_blob, "equipment"),
         capabilities=_infer_terms(text_blob, "capabilities"),
         description=_string_or_none(_first(lower, "description", "about", "remarks")) or text_blob[:500],
-        last_updated=_string_or_none(_first(lower, "last_updated", "updated_at", "modified_at")),
+        last_updated=_string_or_none(_first(lower, "recency_of_page_update", "last_updated", "updated_at", "modified_at")),
         source_row=row,
     )
 
@@ -710,6 +761,30 @@ def _first(row: dict[str, Any], *keys: str) -> Any:
         value = row.get(key)
         if value not in [None, ""]:
             return value
+    return None
+
+
+def _first_url(row: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = row.get(key)
+        if value in [None, "", "null"]:
+            continue
+        candidates: list[str]
+        if isinstance(value, str) and value.strip().startswith("["):
+            try:
+                parsed = json.loads(value)
+                candidates = [str(item).strip() for item in parsed if item not in [None, "", "null"]]
+            except json.JSONDecodeError:
+                candidates = [value]
+        else:
+            candidates = [str(value).strip()]
+        for candidate in candidates:
+            if not candidate or candidate.lower() == "null":
+                continue
+            if candidate.startswith(("http://", "https://")):
+                return candidate
+            if "." in candidate and " " not in candidate:
+                return candidate
     return None
 
 
