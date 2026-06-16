@@ -336,42 +336,92 @@ function CallNotesPanel({ result }) {
   const [activeTurn, setActiveTurn] = useState(-1);
   const [audioStatus, setAudioStatus] = useState('Visual playback ready');
   const previousSeedRef = useRef(null);
+  const playbackTimerRef = useRef(null);
+  const playbackRunRef = useRef(0);
   const conversation = result?.conversation || [];
-  const speakTurn = (index) => {
+  const clearPlaybackTimer = () => {
+    if (playbackTimerRef.current) {
+      window.clearTimeout(playbackTimerRef.current);
+      playbackTimerRef.current = null;
+    }
+  };
+  const stopSpeech = () => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
+  };
+  const estimateTurnMs = (turn) => {
+    const text = `${turn?.speaker || ''}. ${turn?.text || ''}`;
+    const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+    return Math.max(3600, Math.min(12000, wordCount * 430 + 1200));
+  };
+  const advanceTurn = (index, runId) => {
+    if (runId !== playbackRunRef.current) return;
+    if (index >= conversation.length - 1) {
+      setPlaying(false);
+      setAudioStatus('Demo call playback complete');
+      return;
+    }
+    const next = index + 1;
+    setActiveTurn(next);
+    speakTurn(next, runId);
+  };
+  const speakTurn = (index, runId = playbackRunRef.current) => {
     const turn = conversation[index];
-    if (!turn) return;
+    if (!turn || runId !== playbackRunRef.current) return;
+    clearPlaybackTimer();
     const toneOk = playDemoCallTone(turn.speaker?.toLowerCase().includes('agent') ? 'agent' : 'desk');
+    const fallbackMs = estimateTurnMs(turn);
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearPlaybackTimer();
+      playbackTimerRef.current = window.setTimeout(() => advanceTurn(index, runId), 550);
+    };
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
-        window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(`${turn.speaker}. ${turn.text}`);
-        utterance.rate = 0.92;
-        utterance.pitch = turn.speaker?.toLowerCase().includes('agent') ? 1.05 : 0.88;
-        utterance.onstart = () => setAudioStatus('Voice playback active');
-        utterance.onerror = () => setAudioStatus(toneOk ? 'Browser voice blocked; playing demo tones + transcript' : 'Audio blocked; transcript playback active');
+        utterance.rate = 0.82;
+        utterance.pitch = turn.speaker?.toLowerCase().includes('agent') ? 1.03 : 0.9;
+        utterance.onstart = () => setAudioStatus('Voice playback active — completing each sentence');
+        utterance.onend = finish;
+        utterance.onerror = () => {
+          setAudioStatus(toneOk ? 'Browser voice blocked; using timed transcript playback' : 'Audio blocked; transcript playback active');
+          finish();
+        };
         window.speechSynthesis.speak(utterance);
-        window.setTimeout(() => {
-          if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) setAudioStatus(toneOk ? 'Demo tones + transcript active' : 'Transcript playback active');
-        }, 500);
+        playbackTimerRef.current = window.setTimeout(() => {
+          if (!finished) {
+            setAudioStatus(toneOk ? 'Timed transcript playback active' : 'Transcript playback active');
+            finish();
+          }
+        }, fallbackMs);
       } catch (_) {
         setAudioStatus(toneOk ? 'Demo tones + transcript active' : 'Transcript playback active');
+        playbackTimerRef.current = window.setTimeout(() => advanceTurn(index, runId), fallbackMs);
       }
     } else {
       setAudioStatus(toneOk ? 'Demo tones + transcript active' : 'Transcript playback active');
+      playbackTimerRef.current = window.setTimeout(() => advanceTurn(index, runId), fallbackMs);
     }
   };
   const startPlayback = () => {
     if (!conversation.length) return;
+    playbackRunRef.current += 1;
+    const runId = playbackRunRef.current;
+    clearPlaybackTimer();
+    stopSpeech();
     playDemoCallTone('dial');
     setActiveTurn(0);
     setPlaying(true);
     setAudioStatus('Starting demo call playback');
-    window.setTimeout(() => speakTurn(0), 250);
+    playbackTimerRef.current = window.setTimeout(() => speakTurn(0, runId), 250);
   };
   const stopPlayback = () => {
+    playbackRunRef.current += 1;
+    clearPlaybackTimer();
     setPlaying(false);
     setAudioStatus('Playback stopped');
-    if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
+    stopSpeech();
   };
   useEffect(() => {
     const seed = result?.playback_seed || result?.information_date || result?.summary;
@@ -386,20 +436,7 @@ function CallNotesPanel({ result }) {
     }
     return undefined;
   }, [result?.playback_seed, result?.information_date]);
-  useEffect(() => {
-    if (!playing || activeTurn < 0) return undefined;
-    if (activeTurn >= conversation.length - 1) {
-      const doneTimer = window.setTimeout(() => { setPlaying(false); setAudioStatus('Demo call playback complete'); }, 1600);
-      return () => window.clearTimeout(doneTimer);
-    }
-    const timer = window.setTimeout(() => {
-      const next = activeTurn + 1;
-      setActiveTurn(next);
-      speakTurn(next);
-    }, 2600);
-    return () => window.clearTimeout(timer);
-  }, [playing, activeTurn, conversation.length]);
-  useEffect(() => () => { if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel(); }, []);
+  useEffect(() => () => { clearPlaybackTimer(); stopSpeech(); playbackRunRef.current += 1; }, []);
   if (!result) return null;
   return <div className="callNotesPanel"><div><b>Live Demo Call</b><span>Information As Of {formatInfoDate(result.information_date)}</span></div><div className={`callPlaybackBar ${playing ? 'isPlaying' : ''}`} aria-live="polite"><span>{playing ? `▶ Playing Demo Call · Turn ${activeTurn + 1}/${conversation.length}` : audioStatus}</span><button type="button" onClick={playing ? stopPlayback : startPlayback}>{playing ? 'Stop Playback' : 'Play Demo Call'}</button></div><p>{result.summary}</p><div className="callNotesColumns"><div><h3>Confirmed</h3>{(result.verified_claims || []).map((item) => <span key={item}>{item}</span>)}</div><div><h3>Still Check</h3>{(result.open_questions || []).map((item) => <span key={item}>{item}</span>)}</div></div><div className="callTranscript"><h3>Demo Conversation</h3>{conversation.map((turn, i) => <p key={`${turn.speaker}-${i}`} className={i === activeTurn ? 'activeTurn' : i < activeTurn ? 'playedTurn' : ''}><b>{turn.speaker}:</b> {turn.text}</p>)}</div></div>;
 }
