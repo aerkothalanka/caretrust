@@ -816,7 +816,7 @@ def _normalize_facility(row: dict[str, Any], index: int) -> Facility:
     text_blob = " ".join(str(value) for value in row.values() if value is not None)
     unique_id = str(_first(lower, "sync_pk", "unique_id", "id", "facility_id", "uuid") or f"dbx-{index}")
     name = str(
-        _first(lower, "name", "name_standardized", "facility_name", "hospital_name", "organisation_name")
+        _first(lower, "name_standardized", "name", "facility_name", "hospital_name", "organisation_name")
         or f"Facility {index + 1}"
     )
     website = _first_url(lower, "officialwebsite", "website", "websites", "url", "web_url", "facility_url")
