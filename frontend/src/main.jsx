@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles.css';
 
 const PHONE_DISPLAY = '+1 888 707 8012';
@@ -35,7 +37,7 @@ const I18N = {
     country: 'Country', allCountries: 'All Countries', stateRegion: 'State / Region', allStates: 'All States', city: 'City', allCities: 'All Cities', allCitiesInState: 'All Cities In State', postalCode: 'Postal Code', allPostalCodes: 'All Postal Codes', procedure: 'Procedure', radius: 'Radius', selectProcedures: 'Select Procedures', proceduresSelected: '{count} Procedures Selected',
     rankedFacilities: 'Ranked Facilities', rank: 'Rank', facility: 'Facility', facilityName: 'Facility Name', location: 'Location', confidencePct: 'Confidence %', trustTier: 'Trust Tier', evidence: 'Evidence', allLocations: 'All Locations', confidence: 'Confidence', all: 'All', high: 'High', medium: 'Medium', needsReview: 'Needs Review', verified: 'Verified', clickHere: 'Click Here', noFacilities: 'No Facilities Match These Table Filters.',
     trustCard: 'Facility Trust Card', locationPending: 'Location Pending', trustScore: 'Trust Score', claim: 'Claim:', supports: 'Supports {service}.', howScoreWorks: 'How Score Works', verifySourceLinks: 'Verify Source Links', verifying: 'Verifying…', agentBricksReview: 'Agent Bricks Review', specialties: 'Specialties', procedures: 'Procedures', equipmentServices: 'Equipment / Services', noSpecialties: 'No specialty claims extracted yet.', noProcedures: 'No procedure claims extracted yet.', scoreBreakdown: 'Score Breakdown', sources: 'Sources', noSourceUrl: 'No source URL available yet.', uncertainty: 'Uncertainty:', defaultUncertainty: 'Treat extracted claims as claims to verify, not ground truth.',
-    googleMapsRadius: 'Google Maps Radius', insideRadius: '{count} facilities inside selected radius', viewTrustCard: 'View Trust Card', googleMapsUnavailable: 'Google Maps Unavailable', selectFacilityMap: 'Select a facility with latitude/longitude to load the map.',
+    googleMapsRadius: 'Interactive Geo Search', insideRadius: '{count} facilities inside selected radius', viewTrustCard: 'View Trust Card', googleMapsUnavailable: 'Map Unavailable', selectFacilityMap: 'Select a facility with latitude/longitude to load the map.',
     selectedFacility: 'Selected Facility', informationAsOf: 'Information As Of:', reviewReady: 'Review Ready', selectFacilityToReview: 'Select a facility to review.', openTrustCard: 'Open Trust Card', addToShortlist: 'Add to Shortlist', viewShortlist: 'View Shortlist ({count})', savedActions: 'Saved Actions: {actions} • Scenarios: {scenarios}', selectFacility: 'Select Facility',
     recentVerifications: 'Recent Verifications', recentUserActions: 'Recent User Actions', savedScenarios: 'Saved Scenarios', noVerificationHistory: 'No verification history yet.', noUserActions: 'No persisted notes, overrides, or review decisions yet.', noSavedScenarios: 'No saved scenarios yet.', readBackLakebase: 'Read Back From Lakebase',
     chatAssistantTitle: 'Chat Assistant', safeQueryTemplates: 'Safe Query Templates', generateAnswer: 'Generate Answer', topFacilitiesPrompt: 'Top {service} facilities', explainFacilityPrompt: 'Explain {facility}', claimsNeedVerificationPrompt: 'Which claims need verification?', defaultQuestion: 'Show top {service} facilities and explain evidence.', fallbackAnswer: 'Rankings combine evidence fields, sources, contactability, location completeness and human verification.',
@@ -48,7 +50,7 @@ const I18N = {
     country: 'देश', allCountries: 'सभी देश', stateRegion: 'राज्य / क्षेत्र', allStates: 'सभी राज्य', city: 'शहर', allCities: 'सभी शहर', allCitiesInState: 'राज्य के सभी शहर', postalCode: 'पिन कोड', allPostalCodes: 'सभी पिन कोड', procedure: 'प्रक्रिया', radius: 'दायरा', selectProcedures: 'प्रक्रियाएँ चुनें', proceduresSelected: '{count} प्रक्रियाएँ चयनित',
     rankedFacilities: 'रैंक की गई सुविधाएँ', rank: 'रैंक', facility: 'सुविधा', facilityName: 'सुविधा का नाम', location: 'स्थान', confidencePct: 'विश्वास %', trustTier: 'विश्वास स्तर', evidence: 'प्रमाण', allLocations: 'सभी स्थान', confidence: 'विश्वास', all: 'सभी', high: 'उच्च', medium: 'मध्यम', needsReview: 'समीक्षा आवश्यक', verified: 'सत्यापित', clickHere: 'यहाँ क्लिक करें', noFacilities: 'इन टेबल फ़िल्टर से कोई सुविधा मेल नहीं खाती।',
     trustCard: 'सुविधा विश्वास कार्ड', locationPending: 'स्थान लंबित', trustScore: 'विश्वास स्कोर', claim: 'दावा:', supports: '{service} समर्थित है।', howScoreWorks: 'स्कोर कैसे काम करता है', verifySourceLinks: 'स्रोत लिंक सत्यापित करें', verifying: 'सत्यापित हो रहा है…', agentBricksReview: 'एजेंट ब्रिक्स समीक्षा', specialties: 'विशेषताएँ', procedures: 'प्रक्रियाएँ', equipmentServices: 'उपकरण / सेवाएँ', noSpecialties: 'अभी कोई विशेषता दावा नहीं मिला।', noProcedures: 'अभी कोई प्रक्रिया दावा नहीं मिला।', scoreBreakdown: 'स्कोर विवरण', sources: 'स्रोत', noSourceUrl: 'अभी कोई स्रोत URL उपलब्ध नहीं है।', uncertainty: 'अनिश्चितता:', defaultUncertainty: 'निकाले गए दावों को सत्यापन योग्य दावे मानें, अंतिम सत्य नहीं।',
-    googleMapsRadius: 'Google Maps दायरा', insideRadius: 'चुने गए दायरे में {count} सुविधाएँ', viewTrustCard: 'विश्वास कार्ड देखें', googleMapsUnavailable: 'Google Maps उपलब्ध नहीं', selectFacilityMap: 'मैप लोड करने के लिए अक्षांश/देशांतर वाली सुविधा चुनें।',
+    googleMapsRadius: 'इंटरैक्टिव भौगोलिक खोज', insideRadius: 'चुने गए दायरे में {count} सुविधाएँ', viewTrustCard: 'विश्वास कार्ड देखें', googleMapsUnavailable: 'मैप उपलब्ध नहीं', selectFacilityMap: 'मैप लोड करने के लिए अक्षांश/देशांतर वाली सुविधा चुनें।',
     selectedFacility: 'चयनित सुविधा', informationAsOf: 'जानकारी दिनांक:', reviewReady: 'समीक्षा तैयार', selectFacilityToReview: 'समीक्षा के लिए सुविधा चुनें।', openTrustCard: 'विश्वास कार्ड खोलें', addToShortlist: 'शॉर्टलिस्ट में जोड़ें', viewShortlist: 'शॉर्टलिस्ट देखें ({count})', savedActions: 'सहेजी गई कार्रवाइयाँ: {actions} • परिदृश्य: {scenarios}', selectFacility: 'सुविधा चुनें',
     recentVerifications: 'हालिया सत्यापन', recentUserActions: 'हालिया उपयोगकर्ता कार्रवाइयाँ', savedScenarios: 'सहेजे गए परिदृश्य', noVerificationHistory: 'अभी कोई सत्यापन इतिहास नहीं।', noUserActions: 'अभी कोई सहेजे गए नोट, ओवरराइड या समीक्षा निर्णय नहीं।', noSavedScenarios: 'अभी कोई सहेजा गया परिदृश्य नहीं।', readBackLakebase: 'Lakebase से पढ़ा गया',
     chatAssistantTitle: 'चैट सहायक', safeQueryTemplates: 'सुरक्षित प्रश्न टेम्पलेट', generateAnswer: 'उत्तर बनाएँ', topFacilitiesPrompt: 'शीर्ष {service} सुविधाएँ', explainFacilityPrompt: '{facility} समझाएँ', claimsNeedVerificationPrompt: 'किन दावों का सत्यापन चाहिए?', defaultQuestion: 'शीर्ष {service} सुविधाएँ दिखाएँ और प्रमाण समझाएँ।', fallbackAnswer: 'रैंकिंग प्रमाण फ़ील्ड, स्रोत, संपर्कयोग्यता, स्थान पूर्णता और मानव सत्यापन को जोड़ती है।',
@@ -61,7 +63,7 @@ const I18N = {
     country: 'దేశం', allCountries: 'అన్ని దేశాలు', stateRegion: 'రాష్ట్రం / ప్రాంతం', allStates: 'అన్ని రాష్ట్రాలు', city: 'నగరం', allCities: 'అన్ని నగరాలు', allCitiesInState: 'రాష్ట్రంలోని అన్ని నగరాలు', postalCode: 'పిన్ కోడ్', allPostalCodes: 'అన్ని పిన్ కోడ్‌లు', procedure: 'ప్రక్రియ', radius: 'వ్యాసార్థం', selectProcedures: 'ప్రక్రియలను ఎంచుకోండి', proceduresSelected: '{count} ప్రక్రియలు ఎంపికయ్యాయి',
     rankedFacilities: 'ర్యాంక్ చేసిన సదుపాయాలు', rank: 'ర్యాంక్', facility: 'సదుపాయం', facilityName: 'సదుపాయం పేరు', location: 'స్థానం', confidencePct: 'నమ్మకం %', trustTier: 'నమ్మకం స్థాయి', evidence: 'సాక్ష్యం', allLocations: 'అన్ని స్థానాలు', confidence: 'నమ్మకం', all: 'అన్నీ', high: 'అధికం', medium: 'మధ్యస్థం', needsReview: 'సమీక్ష అవసరం', verified: 'ధృవీకరించబడింది', clickHere: 'ఇక్కడ క్లిక్ చేయండి', noFacilities: 'ఈ టేబుల్ ఫిల్టర్‌లకు సరిపడే సదుపాయాలు లేవు.',
     trustCard: 'సదుపాయ నమ్మకం కార్డ్', locationPending: 'స్థానం పెండింగ్‌లో ఉంది', trustScore: 'నమ్మకం స్కోర్', claim: 'దావా:', supports: '{service}కు మద్దతు ఉంది.', howScoreWorks: 'స్కోర్ ఎలా పని చేస్తుంది', verifySourceLinks: 'మూల లింక్‌లను ధృవీకరించండి', verifying: 'ధృవీకరిస్తోంది…', agentBricksReview: 'ఏజెంట్ బ్రిక్స్ సమీక్ష', specialties: 'ప్రత్యేకతలు', procedures: 'ప్రక్రియలు', equipmentServices: 'పరికరాలు / సేవలు', noSpecialties: 'ఇంకా ప్రత్యేకత దావాలు లేవు.', noProcedures: 'ఇంకా ప్రక్రియ దావాలు లేవు.', scoreBreakdown: 'స్కోర్ విభజన', sources: 'మూలాలు', noSourceUrl: 'ఇంకా మూల URL అందుబాటులో లేదు.', uncertainty: 'అనిశ్చితి:', defaultUncertainty: 'తీసుకున్న దావాలను ధృవీకరించాల్సిన దావాలుగా పరిగణించండి, అంతిమ సత్యంగా కాదు.',
-    googleMapsRadius: 'Google Maps వ్యాసార్థం', insideRadius: 'ఎంచుకున్న వ్యాసార్థంలో {count} సదుపాయాలు', viewTrustCard: 'నమ్మకం కార్డ్ చూడండి', googleMapsUnavailable: 'Google Maps అందుబాటులో లేదు', selectFacilityMap: 'మ్యాప్ లోడ్ చేయడానికి అక్షాంశం/రేఖాంశం ఉన్న సదుపాయాన్ని ఎంచుకోండి.',
+    googleMapsRadius: 'ఇంటరాక్టివ్ భౌగోళిక శోధన', insideRadius: 'ఎంచుకున్న వ్యాసార్థంలో {count} సదుపాయాలు', viewTrustCard: 'నమ్మకం కార్డ్ చూడండి', googleMapsUnavailable: 'మ్యాప్ అందుబాటులో లేదు', selectFacilityMap: 'మ్యాప్ లోడ్ చేయడానికి అక్షాంశం/రేఖాంశం ఉన్న సదుపాయాన్ని ఎంచుకోండి.',
     selectedFacility: 'ఎంచుకున్న సదుపాయం', informationAsOf: 'సమాచారం తేదీ:', reviewReady: 'సమీక్షకు సిద్ధం', selectFacilityToReview: 'సమీక్షించడానికి సదుపాయాన్ని ఎంచుకోండి.', openTrustCard: 'నమ్మకం కార్డ్ తెరవండి', addToShortlist: 'షార్ట్‌లిస్ట్‌కు జోడించండి', viewShortlist: 'షార్ట్‌లిస్ట్ చూడండి ({count})', savedActions: 'సేవ్ చేసిన చర్యలు: {actions} • సన్నివేశాలు: {scenarios}', selectFacility: 'సదుపాయం ఎంచుకోండి',
     recentVerifications: 'తాజా ధృవీకరణలు', recentUserActions: 'తాజా వినియోగదారు చర్యలు', savedScenarios: 'సేవ్ చేసిన సన్నివేశాలు', noVerificationHistory: 'ఇంకా ధృవీకరణ చరిత్ర లేదు.', noUserActions: 'ఇంకా సేవ్ చేసిన నోట్స్, ఓవర్‌రైడ్‌లు లేదా సమీక్ష నిర్ణయాలు లేవు.', noSavedScenarios: 'ఇంకా సేవ్ చేసిన సన్నివేశాలు లేవు.', readBackLakebase: 'Lakebase నుండి చదివింది',
     chatAssistantTitle: 'చాట్ అసిస్టెంట్', safeQueryTemplates: 'సురక్షిత ప్రశ్న టెంప్లేట్లు', generateAnswer: 'సమాధానం రూపొందించండి', topFacilitiesPrompt: 'అగ్ర {service} సదుపాయాలు', explainFacilityPrompt: '{facility} వివరించండి', claimsNeedVerificationPrompt: 'ఏ దావాలకు ధృవీకరణ అవసరం?', defaultQuestion: 'అగ్ర {service} సదుపాయాలను చూపించి సాక్ష్యాన్ని వివరించండి.', fallbackAnswer: 'ర్యాంకింగ్‌లు సాక్ష్య ఫీల్డ్‌లు, మూలాలు, సంప్రదింపు సామర్థ్యం, స్థానం పూర్తి స్థాయి మరియు మానవ ధృవీకరణను కలుపుతాయి.',
@@ -354,22 +356,133 @@ function MethodologyModal({ onClose }) {
   return <div className="trustModal" role="dialog" aria-modal="true" aria-label="CareSignal score methodology" onClick={onClose}><aside className="card methodologySheet" onClick={(e) => e.stopPropagation()}><button className="trustClose" aria-label="Close methodology" onClick={onClose}>×</button><span className="eyebrow dark">Scoring Methodology</span><h2>How CareSignal Ranks Facilities</h2><ul><li><b>Evidence match:</b> specialties, procedures, equipment, capabilities, and descriptions are matched to the selected service.</li><li><b>Operational readiness:</b> phone/website contactability and location completeness improve trust.</li><li><b>Human verification:</b> verified claims get a boost; rejected or uncertain claims are penalized.</li><li><b>Uncertainty penalties:</b> sparse evidence, missing source URLs, or missing contact paths are surfaced for follow-up.</li></ul><p>This is a planning aid, not medical advice. Referral decisions should still be confirmed directly with the facility.</p></aside></div>;
 }
 
-function googleMapZoom(radius) { return radius <= 50 ? 10 : radius <= 150 ? 8 : radius <= 350 ? 7 : 6; }
-function googleEmbedSrc(center, radius) {
-  const lat = Number(center?.latitude), lng = Number(center?.longitude);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '';
-  return `https://maps.google.com/maps?ll=${encodeURIComponent(`${lat},${lng}`)}&q=${encodeURIComponent(`${lat},${lng}`)}&z=${googleMapZoom(radius)}&t=m&output=embed`;
+const MAPLIBRE_STYLE = {
+  version: 8,
+  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors',
+    },
+  },
+  layers: [
+    { id: 'osm', type: 'raster', source: 'osm', paint: { 'raster-saturation': -0.08, 'raster-contrast': 0.04 } },
+  ],
+};
+
+function mapLibreZoom(radius) { return radius <= 50 ? 9.8 : radius <= 150 ? 8.2 : radius <= 350 ? 6.8 : 5.6; }
+function hasLngLat(f) { return Number.isFinite(Number(f?.latitude)) && Number.isFinite(Number(f?.longitude)); }
+function facilityLngLat(f) { return [Number(f.longitude), Number(f.latitude)]; }
+function radiusCircleFeature(center, radius) {
+  if (!hasLngLat(center) || Number(radius) > 750) return { type: 'FeatureCollection', features: [] };
+  const lat = rad(Number(center.latitude));
+  const lon = rad(Number(center.longitude));
+  const angular = Number(radius) / 6371;
+  const coords = [];
+  for (let i = 0; i <= 96; i += 1) {
+    const bearing = 2 * Math.PI * (i / 96);
+    const lat2 = Math.asin(Math.sin(lat) * Math.cos(angular) + Math.cos(lat) * Math.sin(angular) * Math.cos(bearing));
+    const lon2 = lon + Math.atan2(Math.sin(bearing) * Math.sin(angular) * Math.cos(lat), Math.cos(angular) - Math.sin(lat) * Math.sin(lat2));
+    coords.push([lon2 * 180 / Math.PI, lat2 * 180 / Math.PI]);
+  }
+  return { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [coords] } }] };
 }
-function GoogleMapView({ center, radius, language, tr }) {
-  const embedSrc = googleEmbedSrc(center, radius);
-  if (!embedSrc) return <div className="googleMapWrap"><div className="mapOverlay"><b>{tr('googleMapsUnavailable')}</b><span>{tr('selectFacilityMap')}</span></div></div>;
-  return <div className="googleMapWrap"><iframe title={`Google map for ${getFacilityDisplayName(center, language) || 'selected facility'}`} className="googleMapFrame" src={embedSrc} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /></div>;
+function facilityFeatureCollection(rows, language, center) {
+  return { type: 'FeatureCollection', features: rows.filter(({ facility }) => hasLngLat(facility)).map(({ facility, distance }) => ({
+    type: 'Feature',
+    properties: {
+      id: facility.unique_id,
+      name: getFacilityDisplayName(facility, language),
+      score: Math.round(Number(facility.score || 0) * 10),
+      tier: displayConfidence(facility),
+      distance: distance === null ? (facility.unique_id === center?.unique_id ? 0 : null) : Math.round(distance),
+      selected: facility.unique_id === center?.unique_id,
+    },
+    geometry: { type: 'Point', coordinates: facilityLngLat(facility) },
+  })) };
 }
+function fitMapToFacilities(map, rows, center) {
+  if (!map || !hasLngLat(center)) return;
+  const coords = rows.filter(({ facility }) => hasLngLat(facility)).map(({ facility }) => facilityLngLat(facility));
+  coords.push(facilityLngLat(center));
+  const bounds = coords.reduce((b, coord) => b.extend(coord), new maplibregl.LngLatBounds(coords[0], coords[0]));
+  map.fitBounds(bounds, { padding: 70, maxZoom: 11.5, duration: 700 });
+}
+
+function MapLibreGeoView({ center, radius, visible, facilities, setSelected, onOpenTrust, language, tr }) {
+  const mapNode = useRef(null);
+  const mapRef = useRef(null);
+  const popupRef = useRef(null);
+  const loadedRef = useRef(false);
+  const latestRef = useRef({ facilities, setSelected, onOpenTrust, language, tr });
+  latestRef.current = { facilities, setSelected, onOpenTrust, language, tr };
+
+  useEffect(() => {
+    if (!mapNode.current || mapRef.current || !hasLngLat(center)) return undefined;
+    const map = new maplibregl.Map({
+      container: mapNode.current,
+      style: MAPLIBRE_STYLE,
+      center: facilityLngLat(center),
+      zoom: mapLibreZoom(radius),
+      pitch: 32,
+      bearing: -7,
+      attributionControl: false,
+    });
+    mapRef.current = map;
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+    map.on('load', () => {
+      loadedRef.current = true;
+      map.addSource('care-radius', { type: 'geojson', data: radiusCircleFeature(center, radius) });
+      map.addSource('care-facilities', { type: 'geojson', data: facilityFeatureCollection(visible, language, center) });
+      map.addLayer({ id: 'care-radius-fill', type: 'fill', source: 'care-radius', paint: { 'fill-color': '#ff3621', 'fill-opacity': 0.09 } });
+      map.addLayer({ id: 'care-radius-line', type: 'line', source: 'care-radius', paint: { 'line-color': '#ff3621', 'line-opacity': 0.78, 'line-width': 2, 'line-dasharray': [2, 2] } });
+      map.addLayer({ id: 'care-facility-halo', type: 'circle', source: 'care-facilities', paint: { 'circle-radius': ['case', ['==', ['get', 'selected'], true], 18, 13], 'circle-color': '#ffffff', 'circle-opacity': 0.92, 'circle-blur': 0.18 } });
+      map.addLayer({ id: 'care-facility-points', type: 'circle', source: 'care-facilities', paint: { 'circle-radius': ['case', ['==', ['get', 'selected'], true], 10, 7], 'circle-color': ['interpolate', ['linear'], ['get', 'score'], 0, '#ef4444', 60, '#f97316', 80, '#2563eb', 100, '#16a34a'], 'circle-stroke-color': ['case', ['==', ['get', 'selected'], true], '#0f172a', '#ffffff'], 'circle-stroke-width': ['case', ['==', ['get', 'selected'], true], 3, 2] } });
+      map.addLayer({ id: 'care-facility-labels', type: 'symbol', source: 'care-facilities', minzoom: 5, layout: { 'text-field': ['get', 'name'], 'text-size': 11, 'text-font': ['Open Sans Regular'], 'text-offset': [0, 1.35], 'text-anchor': 'top', 'text-max-width': 11 }, paint: { 'text-color': '#0f172a', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 } });
+      fitMapToFacilities(map, visible, center);
+    });
+    map.on('mouseenter', 'care-facility-points', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'care-facility-points', () => { map.getCanvas().style.cursor = ''; });
+    map.on('click', 'care-facility-points', (event) => {
+      const feature = event.features?.[0];
+      const facility = latestRef.current.facilities.find((item) => item.unique_id === feature?.properties?.id);
+      if (!facility) return;
+      latestRef.current.setSelected(facility);
+      popupRef.current?.remove();
+      const name = getFacilityDisplayName(facility, latestRef.current.language);
+      const popupEl = document.createElement('div');
+      popupEl.className = 'mapLibrePopup';
+      popupEl.innerHTML = `<b>${name}</b><span>${[facility.city, facility.state].filter(Boolean).join(', ') || 'Location pending'} • ${fmtPercent(facility.score)}</span><button type="button">${latestRef.current.tr('viewTrustCard')}</button>`;
+      popupEl.querySelector('button')?.addEventListener('click', () => latestRef.current.onOpenTrust(facility));
+      popupRef.current = new maplibregl.Popup({ closeButton: false, offset: 20, className: 'careMapPopup' }).setDOMContent(popupEl).setLngLat(facilityLngLat(facility)).addTo(map);
+    });
+    return () => { popupRef.current?.remove(); map.remove(); mapRef.current = null; loadedRef.current = false; };
+  }, [center?.unique_id]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loadedRef.current || !hasLngLat(center)) return;
+    const points = map.getSource('care-facilities');
+    const circle = map.getSource('care-radius');
+    points?.setData(facilityFeatureCollection(visible, language, center));
+    circle?.setData(radiusCircleFeature(center, radius));
+    map.easeTo({ center: facilityLngLat(center), zoom: mapLibreZoom(radius), pitch: 32, bearing: -7, duration: 550 });
+    window.setTimeout(() => fitMapToFacilities(map, visible, center), 80);
+  }, [visible, center?.unique_id, center?.latitude, center?.longitude, radius, language]);
+
+  if (!hasLngLat(center)) return <div className="googleMapWrap mapLibreWrap"><div className="mapOverlay"><b>{tr('googleMapsUnavailable')}</b><span>{tr('selectFacilityMap')}</span></div></div>;
+  return <div className="googleMapWrap mapLibreWrap"><div className="mapLibreCanvas" ref={mapNode} /><div className="mapGlassPanel"><b>{getFacilityDisplayName(center, language)}</b><span>{Number(radius) > 750 ? 'All India coverage' : `${radius} km radius`} • {fmtPercent(center.score)} {tr('trustScore')}</span></div></div>;
+}
+
 function RadiusMap({ facilities, selected, setSelected, radius, setRadius, onOpenTrust, language, tr }) {
-  const center = selected || facilities[0];
+  const center = selected || facilities.find(hasLngLat) || facilities[0];
   const effectiveRadius = Number(radius) > 750 ? Infinity : Number(radius);
   const visible = useMemo(() => facilities.map((f) => ({ facility: f, distance: distanceKm(center, f) })).filter(({ facility, distance }) => distance === null || distance <= effectiveRadius || facility.unique_id === center?.unique_id), [facilities, center?.unique_id, center?.latitude, center?.longitude, effectiveRadius]);
-  return <section className="card mapCard"><div className="cardTitle"><h2>{tr('googleMapsRadius')}</h2><span>{tr('insideRadius', { count: visible.length })}</span></div><div className="radiusControl"><label>{tr('radius')}: <b>{Number(radius) > 750 ? '>750KM' : `${radius} km`}</b><input type="range" min="25" max="751" step="25" value={radius} onChange={(e) => setRadius(Number(e.target.value))} /></label></div><GoogleMapView center={center} radius={radius} language={language} tr={tr} /><div className="mapList">{visible.slice(0, 8).map(({ facility: f, distance }) => <button key={f.unique_id} onClick={() => { setSelected(f); onOpenTrust(f); }}><b title={f.name}>{getFacilityDisplayName(f, language)}</b><span>{distance?.toFixed(0) || 0} km • {f.city || f.state} • {tr('viewTrustCard')}</span></button>)}</div></section>;
+  const selectedName = getFacilityDisplayName(center, language);
+  return <section className="card mapCard interactiveGeoCard"><div className="cardTitle"><h2>{tr('googleMapsRadius')}</h2><span>{tr('insideRadius', { count: visible.length })}</span></div><div className="radiusControl geoRadiusControl"><label>{tr('radius')}: <b>{Number(radius) > 750 ? '>750KM' : `${radius} km`}</b><input type="range" min="25" max="751" step="25" value={radius} onChange={(e) => setRadius(Number(e.target.value))} /></label><div className="geoLegend"><span><i className="legendHigh" /> High trust</span><span><i className="legendMedium" /> Medium</span><span><i className="legendNeeds" /> Needs review</span></div></div><MapLibreGeoView center={center} radius={radius} visible={visible} facilities={facilities} setSelected={setSelected} onOpenTrust={onOpenTrust} language={language} tr={tr} /><div className="mapList geoFacilityList">{visible.slice(0, 10).map(({ facility: f, distance }) => <button key={f.unique_id} className={f.unique_id === center?.unique_id ? 'active' : ''} onClick={() => setSelected(f)} onDoubleClick={() => onOpenTrust(f)}><b title={f.name}>{getFacilityDisplayName(f, language)}</b><span>{distance?.toFixed(0) || 0} km • {f.city || f.state || tr('locationPending')} • {fmtPercent(f.score)}</span><em onClick={(e) => { e.stopPropagation(); onOpenTrust(f); }}>{tr('viewTrustCard')}</em></button>)}</div>{selectedName && <p className="geoHint">Click a map point or facility row to recenter. Double-click a row, popup, or View Trust Card to open evidence for {selectedName}.</p>}</section>;
 }
 function buildDemoCallPreview(facility, procedure, serviceLabel, displayName) {
   const name = displayName || facility?.name || 'Selected Facility';
