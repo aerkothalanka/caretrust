@@ -75,6 +75,42 @@ function translate(language, key, values = {}) {
   return Object.entries(values).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, value ?? ''), template);
 }
 
+
+const FACILITY_NAME_TRANSLATIONS = {
+  'fallback-aravind-madurai': { hi: 'अरविंद नेत्र अस्पताल, मदुरै', te: 'అరవింద్ కంటి ఆసుపత్రి, మదురై' },
+  'fallback-narayana-bengaluru': { hi: 'नारायण हृदय विज्ञान संस्थान, बेंगलुरु', te: 'నారాయణ హృదయ శాస్త్రాల సంస్థ, బెంగళూరు' },
+  'fallback-fortis-delhi': { hi: 'फोर्टिस एस्कॉर्ट्स हार्ट इंस्टीट्यूट, नई दिल्ली', te: 'ఫోర్టిస్ ఎస్కార్ట్స్ హార్ట్ ఇన్‌స్టిట్యూట్, న్యూ ఢిల్లీ' },
+  'aravind eye hospital, madurai': { hi: 'अरविंद नेत्र अस्पताल, मदुरै', te: 'అరవింద్ కంటి ఆసుపత్రి, మదురై' },
+  'narayana institute of cardiac sciences': { hi: 'नारायण हृदय विज्ञान संस्थान, बेंगलुरु', te: 'నారాయణ హృదయ శాస్త్రాల సంస్థ, బెంగళూరు' },
+  'fortis escorts heart institute': { hi: 'फोर्टिस एस्कॉर्ट्स हार्ट इंस्टीट्यूट, नई दिल्ली', te: 'ఫోర్టిస్ ఎస్కార్ట్స్ హార్ట్ ఇన్‌స్టిట్యూట్, న్యూ ఢిల్లీ' },
+};
+
+function canonicalFacilityName(value = '') {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function getFacilityDisplayName(facility = {}, language = 'en') {
+  const baseName = facility.name || facility.facility_name || facility.facility_unique_id || facility.facility_id || facility.unique_id || '';
+  if (!baseName) return '';
+  if (language === 'en') return baseName;
+  const direct = facility[`name_${language}`]
+    || facility[`facility_name_${language}`]
+    || facility.localized_names?.[language]
+    || facility.translated_names?.[language]
+    || facility.translations?.name?.[language]
+    || facility.source_row?.[`name_${language}`]
+    || facility.source_row?.[`facility_name_${language}`]
+    || facility.source_row?.localized_names?.[language]
+    || facility.source_row?.translated_names?.[language];
+  if (direct) return direct;
+  const idKey = facility.unique_id || facility.facility_unique_id || facility.facility_id;
+  if (idKey && FACILITY_NAME_TRANSLATIONS[idKey]?.[language]) return FACILITY_NAME_TRANSLATIONS[idKey][language];
+  const canonical = canonicalFacilityName(baseName);
+  if (FACILITY_NAME_TRANSLATIONS[canonical]?.[language]) return FACILITY_NAME_TRANSLATIONS[canonical][language];
+  const partialKey = Object.keys(FACILITY_NAME_TRANSLATIONS).find((key) => canonical && (canonical.includes(key) || key.includes(canonical)));
+  return partialKey && FACILITY_NAME_TRANSLATIONS[partialKey]?.[language] ? FACILITY_NAME_TRANSLATIONS[partialKey][language] : baseName;
+}
+
 const fallbackFacilities = [
   { unique_id: 'fallback-aravind-madurai', name: 'Aravind Eye Hospital, Madurai', country: 'India', state: 'Tamil Nadu', city: 'Madurai', pincode: '625020', latitude: 9.9252, longitude: 78.1198, score: 8.5, confidence_label: 'High', specialties: ['Ophthalmology'], evidence_summary: 'Cataract, retina, glaucoma and ophthalmic equipment evidence appears in source fields.', source_urls: ['https://aravind.org/hospitals/madurai/'], uncertainty_flags: ['Verify live procedure availability before referral.'] },
   { unique_id: 'fallback-narayana-bengaluru', name: 'Narayana Institute of Cardiac Sciences', country: 'India', state: 'Karnataka', city: 'Bengaluru', pincode: '560099', latitude: 12.811, longitude: 77.6948, score: 8.2, confidence_label: 'High', specialties: ['Cardiology / CTVS'], evidence_summary: 'Cardiac surgery, cath lab, cardiac ICU and coronary intervention evidence found.', source_urls: ['https://www.narayanahealth.org'], uncertainty_flags: ['Human verification recommended for current surgical capacity.'] },
@@ -206,7 +242,7 @@ function FilterBar({ filters, values, setters, services, tr }) {
   </section>;
 }
 
-function FacilityTable({ facilities, selected, setSelected, onOpenTrust, onOpenReview, tr }) {
+function FacilityTable({ facilities, selected, setSelected, onOpenTrust, onOpenReview, language, tr }) {
   const [rankFilter, setRankFilter] = useState('');
   const [nameFilter, setNameFilter] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
@@ -214,10 +250,10 @@ function FacilityTable({ facilities, selected, setSelected, onOpenTrust, onOpenR
   const [confidenceValue, setConfidenceValue] = useState('');
   const choose = (f) => { setSelected(f); onOpenTrust(f); };
   const review = (f, e) => { e.stopPropagation(); setSelected(f); onOpenReview?.(f); };
-  const baseRows = facilities.map((f, i) => ({ f, rank: i + 1, confidence: Math.round(Number(f.score || 0) * 10), trustTier: f.source_row?.trust_tier || displayConfidence(f), location: [f.city, f.state, f.pincode].filter(Boolean).join(', ') }));
+  const baseRows = facilities.map((f, i) => ({ f, displayName: getFacilityDisplayName(f, language), rank: i + 1, confidence: Math.round(Number(f.score || 0) * 10), trustTier: f.source_row?.trust_tier || displayConfidence(f), location: [f.city, f.state, f.pincode].filter(Boolean).join(', ') }));
   const locationOptions = Array.from(new Set(baseRows.map((row) => row.location).filter(Boolean))).sort();
-  const rows = baseRows.filter(({ f, rank, confidence, trustTier, location }) => (!rankFilter || String(rank).startsWith(rankFilter.trim())) && (!nameFilter || String(f.name || '').toLowerCase().includes(nameFilter.trim().toLowerCase())) && (!locationFilter || location === locationFilter) && (!trustFilter || trustTier.toLowerCase().includes(trustFilter)) && (!confidenceValue || confidence >= Number(confidenceValue)));
-  return <section className="card rankings"><div className="cardTitle"><h2>{tr('rankedFacilities')}</h2></div><table className="rank"><thead><tr><th>{tr('rank')}</th><th>{tr('facility')}</th><th>{tr('location')}</th><th>{tr('confidencePct')}</th><th>{tr('trustTier')}</th><th>{tr('evidence')}</th></tr><tr className="rankFilterRow"><th><input value={rankFilter} onChange={(e) => setRankFilter(e.target.value)} placeholder={tr('rank')} /></th><th><input value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} placeholder={tr('facilityName')} /></th><th><select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}><option value="">{tr('allLocations')}</option>{locationOptions.map((loc) => <option key={loc} value={loc}>{loc}</option>)}</select></th><th><input type="number" min="0" max="100" value={confidenceValue} onChange={(e) => setConfidenceValue(e.target.value)} placeholder={tr('confidence')} /></th><th><select value={trustFilter} onChange={(e) => setTrustFilter(e.target.value)}><option value="">{tr('all')}</option><option value="high">{tr('high')}</option><option value="medium">{tr('medium')}</option><option value="needs">{tr('needsReview')}</option><option value="verified">{tr('verified')}</option></select></th><th></th></tr></thead><tbody>{rows.map(({ f, rank, confidence, trustTier, location }) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => choose(f)}><td>{rank}</td><td><span className="facilityName">{f.name}</span></td><td>{location}</td><td><b>{confidence}%</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{trustTier}</span></td><td><button className="evidenceLink" onClick={(e) => review(f, e)}>{tr('clickHere')}</button></td></tr>)}</tbody></table>{!rows.length && <p className="empty">{tr('noFacilities')}</p>}</section>;
+  const rows = baseRows.filter(({ f, displayName, rank, confidence, trustTier, location }) => (!rankFilter || String(rank).startsWith(rankFilter.trim())) && (!nameFilter || `${displayName} ${f.name || ''}`.toLowerCase().includes(nameFilter.trim().toLowerCase())) && (!locationFilter || location === locationFilter) && (!trustFilter || trustTier.toLowerCase().includes(trustFilter)) && (!confidenceValue || confidence >= Number(confidenceValue)));
+  return <section className="card rankings"><div className="cardTitle"><h2>{tr('rankedFacilities')}</h2></div><table className="rank"><thead><tr><th>{tr('rank')}</th><th>{tr('facility')}</th><th>{tr('location')}</th><th>{tr('confidencePct')}</th><th>{tr('trustTier')}</th><th>{tr('evidence')}</th></tr><tr className="rankFilterRow"><th><input value={rankFilter} onChange={(e) => setRankFilter(e.target.value)} placeholder={tr('rank')} /></th><th><input value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} placeholder={tr('facilityName')} /></th><th><select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}><option value="">{tr('allLocations')}</option>{locationOptions.map((loc) => <option key={loc} value={loc}>{loc}</option>)}</select></th><th><input type="number" min="0" max="100" value={confidenceValue} onChange={(e) => setConfidenceValue(e.target.value)} placeholder={tr('confidence')} /></th><th><select value={trustFilter} onChange={(e) => setTrustFilter(e.target.value)}><option value="">{tr('all')}</option><option value="high">{tr('high')}</option><option value="medium">{tr('medium')}</option><option value="needs">{tr('needsReview')}</option><option value="verified">{tr('verified')}</option></select></th><th></th></tr></thead><tbody>{rows.map(({ f, displayName, rank, confidence, trustTier, location }) => <tr key={f.unique_id} className={selected?.unique_id === f.unique_id ? 'selected' : ''} onClick={() => choose(f)}><td>{rank}</td><td><span className="facilityName" title={f.name}>{displayName}</span></td><td>{location}</td><td><b>{confidence}%</b></td><td><span className={`badge ${classForConfidence(displayConfidence(f))}`}>{trustTier}</span></td><td><button className="evidenceLink" onClick={(e) => review(f, e)}>{tr('clickHere')}</button></td></tr>)}</tbody></table>{!rows.length && <p className="empty">{tr('noFacilities')}</p>}</section>;
 }
 
 function normalizeUrlList(...values) {
@@ -286,7 +322,7 @@ function SourceVerificationPanel({ verification }) {
   </div>;
 }
 
-function TrustCard({ facility, serviceLabel, onClose, onMethodology, verification, verifying, onVerifySources, tr }) {
+function TrustCard({ facility, serviceLabel, onClose, onMethodology, verification, verifying, onVerifySources, language, tr }) {
   if (!facility) return null;
   const sources = normalizeUrlList(facility.source_urls, facility.source_url, facility.website, facility.source_row?.source_urls, facility.source_row?.websites);
   const specialties = termList(facility.specialties, 12);
@@ -294,7 +330,8 @@ function TrustCard({ facility, serviceLabel, onClose, onMethodology, verificatio
   const equipment = termList(facility.equipment, 8);
   const entries = scoreBreakdownEntries(facility, sources, specialties, procedures, equipment);
   const currentVerification = verification?.facility_id === facility.unique_id ? verification : null;
-  return <div className="trustModal" role="dialog" aria-modal="true" aria-label={`${tr('trustCard')} for ${facility.name}`} onClick={onClose}><aside className="card trust trustSheet" onClick={(e) => e.stopPropagation()}><button className="trustClose" aria-label="Close Trust Card" onClick={onClose}>×</button><div className="trustHero"><div><span className="eyebrow">{tr('trustCard')}</span><h2>{facility.name}</h2><p>{[facility.city, facility.state, facility.pincode].filter(Boolean).join(', ') || tr('locationPending')}</p></div><div className="scoreBubble"><b>{fmtPercent(facility.score)}</b><span>{tr('trustScore')}</span></div></div><div className="trustClaim"><span className={`badge ${classForConfidence(displayConfidence(facility))}`}>{displayConfidence(facility)}</span><p><b>{tr('claim')}</b> {tr('supports', { service: serviceLabel })}</p><button className="methodLink" onClick={onMethodology}>{tr('howScoreWorks')}</button></div><div className="trustAgentActions"><button onClick={() => onVerifySources?.('crawl')} disabled={verifying || !sources.length}>{verifying ? tr('verifying') : tr('verifySourceLinks')}</button><button onClick={() => onVerifySources?.('agent')} disabled={verifying || !sources.length}>{tr('agentBricksReview')}</button></div><SourceVerificationPanel verification={currentVerification} /><div className="trustSection trustEvidenceLead"><EvidencePillGroup title={tr('specialties')} items={specialties} empty={tr('noSpecialties')} /><EvidencePillGroup title={tr('procedures')} items={procedures} empty={tr('noProcedures')} />{equipment.length > 0 && <EvidencePillGroup title={tr('equipmentServices')} items={equipment} empty="" />}{facility.description && <p className="trustDescription">{facility.description.slice(0, 240)}</p>}</div><div className="trustSection"><h3>{tr('scoreBreakdown')}</h3><div className="why">{entries.slice(0, 8).map(([k, v, m]) => <div key={k}><b>{formatBreakdownValue(v, m)}</b><span>{humanizeTerm(k)}</span></div>)}</div></div><div className="sources trustSection"><h3>{tr('sources')}</h3>{sources.slice(0, 3).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>)}{!sources.length && <span>{tr('noSourceUrl')}</span>}</div><p className="footer"><b>{tr('uncertainty')}</b> {(facility.uncertainty_flags || [tr('defaultUncertainty')]).join('; ')}</p></aside></div>;
+  const displayName = getFacilityDisplayName(facility, language);
+  return <div className="trustModal" role="dialog" aria-modal="true" aria-label={`${tr('trustCard')} for ${displayName}`} onClick={onClose}><aside className="card trust trustSheet" onClick={(e) => e.stopPropagation()}><button className="trustClose" aria-label="Close Trust Card" onClick={onClose}>×</button><div className="trustHero"><div><span className="eyebrow">{tr('trustCard')}</span><h2 title={facility.name}>{displayName}</h2><p>{[facility.city, facility.state, facility.pincode].filter(Boolean).join(', ') || tr('locationPending')}</p></div><div className="scoreBubble"><b>{fmtPercent(facility.score)}</b><span>{tr('trustScore')}</span></div></div><div className="trustClaim"><span className={`badge ${classForConfidence(displayConfidence(facility))}`}>{displayConfidence(facility)}</span><p><b>{tr('claim')}</b> {tr('supports', { service: serviceLabel })}</p><button className="methodLink" onClick={onMethodology}>{tr('howScoreWorks')}</button></div><div className="trustAgentActions"><button onClick={() => onVerifySources?.('crawl')} disabled={verifying || !sources.length}>{verifying ? tr('verifying') : tr('verifySourceLinks')}</button><button onClick={() => onVerifySources?.('agent')} disabled={verifying || !sources.length}>{tr('agentBricksReview')}</button></div><SourceVerificationPanel verification={currentVerification} /><div className="trustSection trustEvidenceLead"><EvidencePillGroup title={tr('specialties')} items={specialties} empty={tr('noSpecialties')} /><EvidencePillGroup title={tr('procedures')} items={procedures} empty={tr('noProcedures')} />{equipment.length > 0 && <EvidencePillGroup title={tr('equipmentServices')} items={equipment} empty="" />}{facility.description && <p className="trustDescription">{facility.description.slice(0, 240)}</p>}</div><div className="trustSection"><h3>{tr('scoreBreakdown')}</h3><div className="why">{entries.slice(0, 8).map(([k, v, m]) => <div key={k}><b>{formatBreakdownValue(v, m)}</b><span>{humanizeTerm(k)}</span></div>)}</div></div><div className="sources trustSection"><h3>{tr('sources')}</h3>{sources.slice(0, 3).map((url) => <a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>)}{!sources.length && <span>{tr('noSourceUrl')}</span>}</div><p className="footer"><b>{tr('uncertainty')}</b> {(facility.uncertainty_flags || [tr('defaultUncertainty')]).join('; ')}</p></aside></div>;
 }
 
 function MethodologyModal({ onClose }) {
@@ -307,19 +344,19 @@ function googleEmbedSrc(center, radius) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '';
   return `https://maps.google.com/maps?ll=${encodeURIComponent(`${lat},${lng}`)}&q=${encodeURIComponent(`${lat},${lng}`)}&z=${googleMapZoom(radius)}&t=m&output=embed`;
 }
-function GoogleMapView({ center, radius, tr }) {
+function GoogleMapView({ center, radius, language, tr }) {
   const embedSrc = googleEmbedSrc(center, radius);
   if (!embedSrc) return <div className="googleMapWrap"><div className="mapOverlay"><b>{tr('googleMapsUnavailable')}</b><span>{tr('selectFacilityMap')}</span></div></div>;
-  return <div className="googleMapWrap"><iframe title={`Google map for ${center?.name || 'selected facility'}`} className="googleMapFrame" src={embedSrc} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /></div>;
+  return <div className="googleMapWrap"><iframe title={`Google map for ${getFacilityDisplayName(center, language) || 'selected facility'}`} className="googleMapFrame" src={embedSrc} loading="lazy" referrerPolicy="no-referrer-when-downgrade" /></div>;
 }
-function RadiusMap({ facilities, selected, setSelected, radius, setRadius, onOpenTrust, tr }) {
+function RadiusMap({ facilities, selected, setSelected, radius, setRadius, onOpenTrust, language, tr }) {
   const center = selected || facilities[0];
   const effectiveRadius = Number(radius) > 750 ? Infinity : Number(radius);
   const visible = useMemo(() => facilities.map((f) => ({ facility: f, distance: distanceKm(center, f) })).filter(({ facility, distance }) => distance === null || distance <= effectiveRadius || facility.unique_id === center?.unique_id), [facilities, center?.unique_id, center?.latitude, center?.longitude, effectiveRadius]);
-  return <section className="card mapCard"><div className="cardTitle"><h2>{tr('googleMapsRadius')}</h2><span>{tr('insideRadius', { count: visible.length })}</span></div><div className="radiusControl"><label>{tr('radius')}: <b>{Number(radius) > 750 ? '>750KM' : `${radius} km`}</b><input type="range" min="25" max="751" step="25" value={radius} onChange={(e) => setRadius(Number(e.target.value))} /></label></div><GoogleMapView center={center} radius={radius} tr={tr} /><div className="mapList">{visible.slice(0, 8).map(({ facility: f, distance }) => <button key={f.unique_id} onClick={() => { setSelected(f); onOpenTrust(f); }}><b>{f.name}</b><span>{distance?.toFixed(0) || 0} km • {f.city || f.state} • {tr('viewTrustCard')}</span></button>)}</div></section>;
+  return <section className="card mapCard"><div className="cardTitle"><h2>{tr('googleMapsRadius')}</h2><span>{tr('insideRadius', { count: visible.length })}</span></div><div className="radiusControl"><label>{tr('radius')}: <b>{Number(radius) > 750 ? '>750KM' : `${radius} km`}</b><input type="range" min="25" max="751" step="25" value={radius} onChange={(e) => setRadius(Number(e.target.value))} /></label></div><GoogleMapView center={center} radius={radius} language={language} tr={tr} /><div className="mapList">{visible.slice(0, 8).map(({ facility: f, distance }) => <button key={f.unique_id} onClick={() => { setSelected(f); onOpenTrust(f); }}><b title={f.name}>{getFacilityDisplayName(f, language)}</b><span>{distance?.toFixed(0) || 0} km • {f.city || f.state} • {tr('viewTrustCard')}</span></button>)}</div></section>;
 }
-function buildDemoCallPreview(facility, procedure, serviceLabel) {
-  const name = facility?.name || 'Selected Facility';
+function buildDemoCallPreview(facility, procedure, serviceLabel, displayName) {
+  const name = displayName || facility?.name || 'Selected Facility';
   const lower = name.toLowerCase();
   const cardiacTurns = [
     ['CareSignal Agent', `Hello, I am calling on behalf of a care coordinator. Can you confirm whether ${name} currently handles ${serviceLabel} referrals?`],
@@ -382,11 +419,11 @@ function playDemoCallTone(kind = 'dial') {
   }
 }
 
-function RecentHistory({ title, items, empty, tr }) {
-  return <section className="card historyCard"><div className="cardTitle"><h2>{title}</h2><span>{tr('readBackLakebase')}</span></div><div className="historyList">{items.slice(0, 6).map((item) => { const data = item.action_data || {}; const label = item.action_type || item.status || item.verification_status || item.procedure || item.service; const detail = data.note || data.justification || data.notes || data.title || data.status || item.notes || item.location || 'Saved'; return <div key={item.action_id || item.verification_id || item.shortlist_id || item.created_at} className="historyItem"><b>{item.facility_name || item.facility_unique_id || item.facility_id || item.title || item.unique_id || item.location || 'Scenario'}</b><span>{humanizeTerm(label)} • {detail}</span><small>{item.created_at || ''}</small></div>; })}{!items.length && <p className="empty">{empty}</p>}</div></section>;
+function RecentHistory({ title, items, empty, language, tr }) {
+  return <section className="card historyCard"><div className="cardTitle"><h2>{title}</h2><span>{tr('readBackLakebase')}</span></div><div className="historyList">{items.slice(0, 6).map((item) => { const data = item.action_data || {}; const label = item.action_type || item.status || item.verification_status || item.procedure || item.service; const detail = data.note || data.justification || data.notes || data.title || data.status || item.notes || item.location || 'Saved'; return <div key={item.action_id || item.verification_id || item.shortlist_id || item.created_at} className="historyItem"><b>{getFacilityDisplayName({ unique_id: item.facility_unique_id || item.facility_id || item.unique_id, name: item.facility_name || item.title || item.location }, language) || 'Scenario'}</b><span>{humanizeTerm(label)} • {detail}</span><small>{item.created_at || ''}</small></div>; })}{!items.length && <p className="empty">{empty}</p>}</div></section>;
 }
 
-function VerificationForm({ facility, service, serviceLabel, facilities, location, onVerified, onHistory, verification, verifying, onVerifySources, callResult, callingFacility, onCallFacility, tr }) {
+function VerificationForm({ facility, service, serviceLabel, facilities, location, onVerified, onHistory, verification, verifying, onVerifySources, callResult, callingFacility, onCallFacility, language, tr }) {
   const status = 'verified';
   const [notes, setNotes] = useState('Verified by phone or visit.');
   const [overrideScore, setOverrideScore] = useState('');
@@ -397,6 +434,7 @@ function VerificationForm({ facility, service, serviceLabel, facilities, locatio
   const [scenarioMessage, setScenarioMessage] = useState('');
   if (!facility) return null;
   const currentVerification = verification?.facility_id === facility.unique_id ? verification : null;
+  const displayName = getFacilityDisplayName(facility, language);
   const saveAction = async (action_type, action_data = {}) => {
     await api('/api/actions', { method: 'POST', body: JSON.stringify({ user_id: 'CareSignal demo user', facility_id: facility.unique_id, action_type, action_data: { procedure: service, facility_name: facility.name, ...action_data } }) });
     await onHistory?.();
@@ -558,21 +596,22 @@ function FacilityInfoTimeline({ actions, facility, tr }) {
   return <section className="card infoTimeline"><div className="cardTitle"><h2>{tr('latestFacilityInfo')}</h2><span>As Of {formatInfoDate(latestInfoDate(rows, facility))}</span></div><p>{tr('savedLakebaseInfo')}</p><div className="infoTimelineList">{rows.slice(0, 6).map((action) => { const data = action.action_data || {}; const title = action.action_type === 'call_note' ? 'Call Notes' : data.mode === 'agent' ? tr('agentBricksReview') : action.action_type === 'source_verification' ? 'Verified Sources' : humanizeTerm(action.action_type); const detail = data.summary || data.notes || data.justification || data.status || 'Saved update'; return <div key={action.action_id || `${action.action_type}-${action.created_at}`} className="infoTimelineItem"><b>{title}</b><small>Information As Of {formatInfoDate(data.information_date || action.updated_at || action.created_at)}</small><span>{detail}</span>{Array.isArray(data.verified_claims) && data.verified_claims.length > 0 && <em>{data.verified_claims.slice(0, 2).join(' • ')}</em>}</div>; })}{!rows.length && <p className="empty">{tr('noRecentUpdates')}</p>}</div></section>;
 }
 
-function SelectedFacilityPanel({ selected, onOpenTrust, onAddShortlist, onViewShortlists, shortlistCount, userActionsCount, scenarioCount, latestDate, tr }) {
+function SelectedFacilityPanel({ selected, onOpenTrust, onAddShortlist, onViewShortlists, shortlistCount, userActionsCount, scenarioCount, latestDate, language, tr }) {
   return <section className="card selectedFacilityPanel">
     <div className="cardTitle"><h2>{tr('selectedFacility')}</h2></div>
     <p className="infoDateLine"><b>{tr('informationAsOf')}</b> {formatInfoDate(latestDate)}</p>
-    {selected ? <div className="selectedFacilitySummary"><b>{selected.name}</b><span>{[selected.city, selected.state, selected.pincode].filter(Boolean).join(', ')}</span><small>Score {fmtPercent(selected.score)} • {selected.trust_tier || selected.status || tr('reviewReady')}</small></div> : <p className="empty">{tr('selectFacilityToReview')}</p>}
+    {selected ? <div className="selectedFacilitySummary"><b title={selected.name}>{getFacilityDisplayName(selected, language)}</b><span>{[selected.city, selected.state, selected.pincode].filter(Boolean).join(', ')}</span><small>Score {fmtPercent(selected.score)} • {selected.trust_tier || selected.status || tr('reviewReady')}</small></div> : <p className="empty">{tr('selectFacilityToReview')}</p>}
     <div className="trustReviewButtonRow"><button className="trustOpenWide" onClick={() => onOpenTrust()} disabled={!selected}>{tr('openTrustCard')}</button><button className="trustOpenWide shortlistInline" onClick={onAddShortlist} disabled={!selected}>{tr('addToShortlist')}</button><button className="trustOpenWide shortlistInline" onClick={onViewShortlists} disabled={!shortlistCount}>{tr('viewShortlist', { count: shortlistCount })}</button></div>
     <p className="empty">{tr('savedActions', { actions: userActionsCount, scenarios: scenarioCount })}</p>
   </section>;
 }
 
-function TrustReviewFacilityFilter({ selected, facilities, onSelectFacility, tr }) {
-  return <section className="trustReviewFacilityFilter"><label className="facilitySelectLabel"><span>{tr('facility')}</span><select value={selected?.unique_id || ''} onChange={(e) => onSelectFacility(e.target.value)}><option value="">{tr('selectFacility')}</option>{facilities.map((f) => <option key={f.unique_id} value={f.unique_id}>{f.name}</option>)}</select></label></section>;
+function TrustReviewFacilityFilter({ selected, facilities, onSelectFacility, language, tr }) {
+  return <section className="trustReviewFacilityFilter"><label className="facilitySelectLabel"><span>{tr('facility')}</span><select value={selected?.unique_id || ''} onChange={(e) => onSelectFacility(e.target.value)}><option value="">{tr('selectFacility')}</option>{facilities.map((f) => <option key={f.unique_id} value={f.unique_id}>{getFacilityDisplayName(f, language)}</option>)}</select></label></section>;
 }
 
 function AssistantPanel({ service, serviceLabel, selected, language, tr }) {
+  const selectedDisplayName = getFacilityDisplayName(selected, language);
   const defaultQuestion = tr('defaultQuestion', { service: serviceLabel });
   const [question, setQuestion] = useState(defaultQuestion);
   const [answer, setAnswer] = useState(null);
@@ -580,7 +619,7 @@ function AssistantPanel({ service, serviceLabel, selected, language, tr }) {
     setQuestion(defaultQuestion);
     setAnswer(null);
   }, [defaultQuestion, language]);
-  const quickPrompts = [tr('topFacilitiesPrompt', { service: serviceLabel }), tr('explainFacilityPrompt', { facility: selected?.name || tr('selectedFacility') }), tr('claimsNeedVerificationPrompt')];
+  const quickPrompts = [tr('topFacilitiesPrompt', { service: serviceLabel }), tr('explainFacilityPrompt', { facility: selectedDisplayName || tr('selectedFacility') }), tr('claimsNeedVerificationPrompt')];
   const ask = async (prompt = question) => {
     setQuestion(prompt);
     try { setAnswer(await api('/api/assistant/query', { method: 'POST', body: JSON.stringify({ question: prompt, procedure: service, unique_id: selected?.unique_id, language }) })); }
@@ -589,8 +628,8 @@ function AssistantPanel({ service, serviceLabel, selected, language, tr }) {
   return <section className="card chartAssistant"><div className="cardTitle"><h2>{tr('chatAssistantTitle')}</h2><span>{tr('safeQueryTemplates')}</span></div><div className="promptChips">{quickPrompts.map((prompt) => <button key={prompt} onClick={() => ask(prompt)}>{prompt}</button>)}</div><textarea value={question} onChange={(e) => setQuestion(e.target.value)} /><div className="assistantActions"><button onClick={() => ask()}>{tr('generateAnswer')}</button><a className="voiceCallBtn" href={`tel:${PHONE_TEL}`}>Call {PHONE_DISPLAY}</a></div>{answer && <div className="assistantAnswer"><p>{answer.answer}</p><div className="bars">{(answer.data || []).slice(0, 6).map((row, i) => <div key={row.facility || row.name || i}><span>{row.facility || row.name || row.state}</span><i style={{ width: `${Math.min(100, (row.score || row.average_score || 5) * 10)}%` }} /></div>)}</div></div>}</section>;
 }
 
-function Shortlists({ selected, shortlists, onAdd }) {
-  return <section className="card"><div className="cardTitle"><h2>Shortlists</h2><span>Planner Decisions</span></div><button onClick={onAdd} disabled={!selected}>Add Selected Facility</button><div className="shortlistItems">{shortlists.map((x) => <div key={x.id || x.shortlist_id} className="shortlistItem"><b>{x.name || x.facility_name || x.facility_unique_id}</b><small>{x.meta || `${humanizeTerm(x.procedure)} • ${x.notes || 'Shortlisted'}`}</small></div>)}{!shortlists.length && <p className="empty">No Shortlisted Facilities Yet.</p>}</div></section>;
+function Shortlists({ selected, shortlists, onAdd, language }) {
+  return <section className="card"><div className="cardTitle"><h2>Shortlists</h2><span>Planner Decisions</span></div><button onClick={onAdd} disabled={!selected}>Add Selected Facility</button><div className="shortlistItems">{shortlists.map((x) => <div key={x.id || x.shortlist_id} className="shortlistItem"><b>{getFacilityDisplayName({ unique_id: x.facility_unique_id || x.facility_id || x.unique_id, name: x.name || x.facility_name || x.facility_unique_id }, language)}</b><small>{x.meta || `${humanizeTerm(x.procedure)} • ${x.notes || 'Shortlisted'}`}</small></div>)}{!shortlists.length && <p className="empty">No Shortlisted Facilities Yet.</p>}</div></section>;
 }
 function ServiceTable({ services }) { return <section className="card"><div className="cardTitle"><h2>Services Grouped By Specialty</h2><span>Derived Table Preview</span></div><table className="rank"><thead><tr><th>Procedure</th><th>Specialty Group</th><th>Keywords</th></tr></thead><tbody>{services.map((s) => <tr key={s.service_id}><td>{s.service_label}</td><td>{s.specialty_group}</td><td><small>{s.keywords}</small></td></tr>)}</tbody></table></section>; }
 
@@ -633,29 +672,29 @@ function App() {
   const openReview = (facility = selected) => { if (facility) setSelected(facility); setActiveTab('verification'); };
   const selectFacilityForReview = (uniqueId) => { const facility = displayFacilities.find((f) => f.unique_id === uniqueId); if (facility) { setSelected(facility); setTrustVerification(null); setCallResult(null); } };
   const onVerified = async (status, apiFacility) => { if (!selected) return; const delta = status === 'verified' ? 1.5 : status === 'rejected' ? -2 : 0.5; const updated = normalizeFacility(apiFacility || { ...selected, human_verification_status: status, human_verified: status === 'verified', score: Math.max(0, Math.min(10, Number(selected.score || 0) + delta)) }, 0); setSelected(updated); setFacilities((rows) => rows.map((f) => f.unique_id === updated.unique_id ? updated : f).sort((a, b) => b.score - a.score)); await refreshHistory(); };
-  const addShortlist = async () => { if (!selected) return; const optimistic = { id: `${selected.unique_id}-${Date.now()}`, name: selected.name, meta: `${serviceLabel} • ${selected.city || selected.state || 'India'}` }; setShortlists((x) => [optimistic, ...x]); try { await api('/api/shortlists', { method: 'POST', body: JSON.stringify({ unique_id: selected.unique_id, procedure: service, notes: `${serviceLabel} shortlist` }) }); await refreshHistory(); } catch (_) {} };
+  const addShortlist = async () => { if (!selected) return; const optimistic = { id: `${selected.unique_id}-${Date.now()}`, name: getFacilityDisplayName(selected, language), meta: `${serviceLabel} • ${selected.city || selected.state || 'India'}` }; setShortlists((x) => [optimistic, ...x]); try { await api('/api/shortlists', { method: 'POST', body: JSON.stringify({ unique_id: selected.unique_id, procedure: service, notes: `${serviceLabel} shortlist` }) }); await refreshHistory(); } catch (_) {} };
   const verifyTrustSources = async (mode = 'crawl') => { if (!selected) return; setTrustVerifying(true); setTrustVerification(null); try { const data = await api('/api/trust/verify-links', { method: 'POST', body: JSON.stringify({ unique_id: selected.unique_id, procedure: service, mode }) }); setTrustVerification(data.result); await refreshHistory(); await loadFacilityUpdates(selected.unique_id); } catch (err) { setTrustVerification({ facility_id: selected.unique_id, facility_name: selected.name, mode, status: 'error', summary: err.message || 'Source verification failed.', checks: [] }); } finally { setTrustVerifying(false); } };
-  const callFacilityDemo = async () => { if (!selected) return; const preview = buildDemoCallPreview(selected, service, serviceLabel); playDemoCallTone('dial'); setCallResult(preview); setCallingFacility(true); try { const data = await api('/api/trust/call-facility', { method: 'POST', body: JSON.stringify({ unique_id: selected.unique_id, procedure: service }) }); setCallResult({ ...data.result, playback_seed: Date.now() }); await refreshHistory(); await loadFacilityUpdates(selected.unique_id); } catch (err) { setCallResult({ ...preview, status: 'demo_call_error', summary: err.message || 'Demo call note generation failed; playing local demo transcript.' }); } finally { setCallingFacility(false); } };
+  const callFacilityDemo = async () => { if (!selected) return; const preview = buildDemoCallPreview(selected, service, serviceLabel, getFacilityDisplayName(selected, language)); playDemoCallTone('dial'); setCallResult(preview); setCallingFacility(true); try { const data = await api('/api/trust/call-facility', { method: 'POST', body: JSON.stringify({ unique_id: selected.unique_id, procedure: service }) }); setCallResult({ ...data.result, playback_seed: Date.now() }); await refreshHistory(); await loadFacilityUpdates(selected.unique_id); } catch (err) { setCallResult({ ...preview, status: 'demo_call_error', summary: err.message || 'Demo call note generation failed; playing local demo transcript.' }); } finally { setCallingFacility(false); } };
 
   return <>
     <AppHeader activeTab={activeTab} setActiveTab={setActiveTab} selected={selected} language={language} setLanguage={setLanguage} tr={tr} />
     <main className="main">
       <section className="missionStrip">{tr('mission')}</section>
       {activeTab !== 'verification' && activeTab !== 'assistant' && <section className="hero filtersOnly"><FilterBar filters={filters} values={{ country, state, city, pincode, services: activeServices, radius }} setters={{ setCountry, setState, setCity, setPincode, setServices: setSelectedServices, setRadius }} services={services} tr={tr} /></section>}
-      {activeTab === 'explorer' && <div className="grid single"><FacilityTable facilities={displayFacilities} selected={selected} setSelected={setSelected} onOpenTrust={openTrust} onOpenReview={openReview} tr={tr} /></div>}
-      {activeTab === 'map' && <div className="grid single"><RadiusMap facilities={displayFacilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} onOpenTrust={openTrust} tr={tr} /></div>}
+      {activeTab === 'explorer' && <div className="grid single"><FacilityTable facilities={displayFacilities} selected={selected} setSelected={setSelected} onOpenTrust={openTrust} onOpenReview={openReview} language={language} tr={tr} /></div>}
+      {activeTab === 'map' && <div className="grid single"><RadiusMap facilities={displayFacilities} selected={selected} setSelected={setSelected} radius={radius} setRadius={setRadius} onOpenTrust={openTrust} language={language} tr={tr} /></div>}
       {activeTab === 'verification' && <>
         <div className="trustReviewAccentLine" />
-        <TrustReviewFacilityFilter selected={selected} facilities={displayFacilities} onSelectFacility={selectFacilityForReview} tr={tr} />
+        <TrustReviewFacilityFilter selected={selected} facilities={displayFacilities} onSelectFacility={selectFacilityForReview} language={language} tr={tr} />
         <div className="grid trustReviewGrid">
-          <div className="trustReviewColumn trustReviewLeftColumn"><SelectedFacilityPanel selected={selected} onOpenTrust={openTrust} onAddShortlist={addShortlist} onViewShortlists={() => setActiveTab('shortlists')} shortlistCount={shortlists.length + scenarioShortlists.length} userActionsCount={userActions.length} scenarioCount={scenarioShortlists.length} latestDate={latestInfoDate(facilityUpdates, selected || {})} tr={tr} /><RecentHistory title={tr('recentVerifications')} items={recentVerifications} empty={tr('noVerificationHistory')} tr={tr} /><FacilityInfoTimeline actions={facilityUpdates} facility={selected || {}} tr={tr} /></div>
-          <div className="trustReviewColumn trustReviewRightColumn"><VerificationForm facility={selected} service={service} serviceLabel={serviceLabel} facilities={displayFacilities} location={city || state || country || 'India'} onVerified={onVerified} onHistory={refreshHistory} verification={trustVerification} verifying={trustVerifying} onVerifySources={verifyTrustSources} callResult={callResult} callingFacility={callingFacility} onCallFacility={callFacilityDemo} tr={tr} /><RecentHistory title={tr('recentUserActions')} items={userActions} empty={tr('noUserActions')} tr={tr} /><RecentHistory title={tr('savedScenarios')} items={scenarioShortlists} empty={tr('noSavedScenarios')} tr={tr} /></div>
+          <div className="trustReviewColumn trustReviewLeftColumn"><SelectedFacilityPanel selected={selected} onOpenTrust={openTrust} onAddShortlist={addShortlist} onViewShortlists={() => setActiveTab('shortlists')} shortlistCount={shortlists.length + scenarioShortlists.length} userActionsCount={userActions.length} scenarioCount={scenarioShortlists.length} latestDate={latestInfoDate(facilityUpdates, selected || {})} language={language} tr={tr} /><RecentHistory title={tr('recentVerifications')} items={recentVerifications} empty={tr('noVerificationHistory')} language={language} tr={tr} /><FacilityInfoTimeline actions={facilityUpdates} facility={selected || {}} tr={tr} /></div>
+          <div className="trustReviewColumn trustReviewRightColumn"><VerificationForm facility={selected} service={service} serviceLabel={serviceLabel} facilities={displayFacilities} location={city || state || country || 'India'} onVerified={onVerified} onHistory={refreshHistory} verification={trustVerification} verifying={trustVerifying} onVerifySources={verifyTrustSources} callResult={callResult} callingFacility={callingFacility} onCallFacility={callFacilityDemo} language={language} tr={tr} /><RecentHistory title={tr('recentUserActions')} items={userActions} empty={tr('noUserActions')} language={language} tr={tr} /><RecentHistory title={tr('savedScenarios')} items={scenarioShortlists} empty={tr('noSavedScenarios')} language={language} tr={tr} /></div>
         </div>
       </>}
       {activeTab === 'assistant'  && <><div className="trustReviewAccentLine chatAssistantAccentLine" /><div className="grid single assistantOnlyGrid"><AssistantPanel service={service} serviceLabel={serviceLabel} selected={selected} language={language} tr={tr} /></div></>}
-      {activeTab === 'shortlists' && <div className="grid"><Shortlists selected={selected} shortlists={[...scenarioShortlists.map((x) => ({ ...x, name: x.title || x.location, meta: `${humanizeTerm(x.service)} • ${(x.facility_ids || []).length} facilities` })), ...shortlists]} onAdd={addShortlist} /><ServiceTable services={services} /></div>}
+      {activeTab === 'shortlists' && <div className="grid"><Shortlists selected={selected} shortlists={[...scenarioShortlists.map((x) => ({ ...x, name: x.title || x.location, meta: `${humanizeTerm(x.service)} • ${(x.facility_ids || []).length} facilities` })), ...shortlists]} onAdd={addShortlist} language={language} /><ServiceTable services={services} /></div>}
     </main>
-    {trustOpen && <TrustCard facility={selected} serviceLabel={serviceLabel} verification={trustVerification} verifying={trustVerifying} onVerifySources={verifyTrustSources} onClose={() => setTrustOpen(false)} onMethodology={() => setMethodOpen(true)} tr={tr} />}
+    {trustOpen && <TrustCard facility={selected} serviceLabel={serviceLabel} verification={trustVerification} verifying={trustVerifying} onVerifySources={verifyTrustSources} onClose={() => setTrustOpen(false)} onMethodology={() => setMethodOpen(true)} language={language} tr={tr} />}
     {methodOpen && <MethodologyModal onClose={() => setMethodOpen(false)} />}
   </>;
 }
