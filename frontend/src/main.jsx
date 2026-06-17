@@ -302,8 +302,24 @@ function scoreBreakdownEntries(facility, sources, specialties, procedures, equip
 }
 
 function formatBreakdownValue(value, max) {
-  if (typeof value === 'string') return value;
-  return `${fmtCompactScore(value)}${max ? `/${fmtCompactScore(max)}` : ''}`;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed || /%|pending|n\/a|unknown/i.test(trimmed)) return value;
+    const fraction = trimmed.match(/^(-?\d+(?:\.\d+)?)\s*\/\s*(-?\d+(?:\.\d+)?)$/);
+    if (fraction) {
+      const numerator = Number(fraction[1]);
+      const denominator = Number(fraction[2]);
+      return denominator ? `${Math.round((numerator / denominator) * 100)}%` : '0%';
+    }
+    const numeric = Number(trimmed);
+    if (!Number.isNaN(numeric)) return formatBreakdownValue(numeric, max);
+    return value;
+  }
+  const numeric = Number(value || 0);
+  const numericMax = Number(max || 0);
+  if (numericMax) return `${Math.round((numeric / numericMax) * 100)}%`;
+  if (numeric >= -1 && numeric <= 1) return `${Math.round(numeric * 100)}%`;
+  return `${Math.round(numeric * 10)}%`;
 }
 
 function SourceVerificationPanel({ verification }) {
